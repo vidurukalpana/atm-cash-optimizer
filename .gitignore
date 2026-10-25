@@ -1,0 +1,42 @@
+# --- Project data and generated output (global rule 8) ---
+# Keep the folder skeleton (.gitkeep files) but never the contents.
+/data/**
+!/data/**/
+!/data/**/.gitkeep
+/reports/**
+!/reports/**/
+!/reports/**/.gitkeep
+mlruns/
+mlartifacts/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+.env
+
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Spark ---
+spark-warehouse/
+metastore_db/
+derby.log
+
+# --- Editors / OS ---
+.DS_Store
+.idea/
+.vscode/
+
+docs/
