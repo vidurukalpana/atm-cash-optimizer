@@ -1,0 +1,21 @@
+# Machine, network and planning parameters.
+# Values marked ASSUMPTION are placeholders — see docs/assumptions.md.
+nn5_unit_lkr: 50000              # ASSUMPTION — 1 NN5 unit = LKR 50,000
+
+# Denominations per track. "total" = a single, undivided cash amount.
+tracks:
+  nn5: {denominations: [total]}
+  lk:  {denominations: ["5000", "1000", "500"]}
+
+atm:
+  notes_per_cassette: 2500       # ASSUMPTION
+  cassettes: {"5000": 2, "1000": 1, "500": 1}   # ASSUMPTION — cassettes per denomination
+  total_capacity_lkr: 28750000   # used by nn5 track (single denomination)
+
+crm:
+  vault_capacity_lkr: 20000000   # ASSUMPTION
+
+bundle_notes: 100                # notes per bundle (loading unit)
+order_lead_days: 1               # orders placed at least this many days before the visit
+planning_horizon_days: 14
+initial_fill_fraction: 1.0       # share of capacity loaded at the start of a simulation

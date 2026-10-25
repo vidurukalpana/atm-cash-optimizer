@@ -1,0 +1,16 @@
+# Forecasting model parameters.
+quantiles: [0.05, 0.5, 0.8, 0.9, 0.95, 0.98]
+horizon_max: 14                  # days ahead (h = 1..horizon_max)
+lags: [1, 2, 3, 4, 5, 6, 7, 14]
+rolling_windows: [7, 28]
+weekday_mean_weeks: 4
+retrain_every_days: 7
+min_train_days: 365
+lightgbm:
+  n_estimators: 600
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 50
+  subsample: 0.8
+  colsample_bytree: 0.8
+seed: 42

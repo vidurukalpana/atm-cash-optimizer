@@ -1,0 +1,7 @@
+# Cost parameters used by the optimizer and the backtest metrics.
+# Values marked ASSUMPTION are placeholders — see docs/assumptions.md.
+currency: LKR
+visit_fee: 15000                 # ASSUMPTION — per planned vendor visit
+emergency_visit_fee: 30000       # ASSUMPTION — per unplanned visit after a stockout
+idle_cash_annual_rate: 0.08      # ASSUMPTION — update from current Sri Lankan rates
+stockout_penalty_per_day: 25000  # ASSUMPTION — per machine-day with unmet withdrawals
