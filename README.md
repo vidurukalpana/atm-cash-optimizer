@@ -1,2 +1,26 @@
 # atm-cash-optimizer
-Bank-side cash planning system for ATMs and Cash Recycler Machines: probabilistic demand forecasting, cost-optimized replenishment by denomination, vendor order files and reconciliation.
+
+Bank-side cash planning system for ATMs and Cash Recycler Machines: probabilistic demand
+forecasting, cost-optimized replenishment by denomination, vendor order files and reconciliation.
+
+> Work in progress — see [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) for the roadmap
+> and [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md) for a plain-language explanation of the project.
+
+## Setup
+
+Requires Python 3.11 (and Java 17/21 for the Spark steps).
+
+```bash
+# one-time setup
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install
+
+# lint
+ruff check .
+ruff format --check .
+
+# fast test suite
+pytest -m "not slow"
+```
