@@ -59,7 +59,7 @@ html {{ font-size: 17px; }}
     height: 8.2rem; box-sizing: border-box;
 }}
 [data-testid="stMetricLabel"] p {{ color: {MUTED}; font-size: 0.92rem; font-weight: 500; }}
-[data-testid="stMetricValue"] {{ color: {NAVY}; font-weight: 600; }}
+[data-testid="stMetricValue"] {{ color: {NAVY}; font-weight: 600; font-size: 1.9rem; }}
 
 .chips {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin: -0.3rem 0 1.2rem; }}
 .chip {{
@@ -152,7 +152,8 @@ def setting_name(policy: str, param: float) -> str:
 
 
 def lkr_millions(value: float) -> str:
-    return f"LKR {value / 1e6:,.2f}M"
+    """Card value in millions; put "(LKR)" in the card label."""
+    return f"{value / 1e6:,.2f}M"
 
 
 def style_figure(fig: go.Figure, height: int = 380) -> go.Figure:

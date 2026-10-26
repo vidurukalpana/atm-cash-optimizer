@@ -21,7 +21,7 @@ document.querySelectorAll('img[data-label]').forEach((img) => {
 const lightbox = document.querySelector('.lightbox');
 const large = lightbox.querySelector('img');
 document.addEventListener('click', (event) => {
-  const img = event.target.closest('.gallery img, .hero-shot img');
+  const img = event.target.closest('.gallery img, .hero-shot img, .chart img');
   if (img) {
     large.src = img.src;
     large.alt = img.alt;

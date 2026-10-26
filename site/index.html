@@ -22,12 +22,12 @@
     <nav class="nav-links">
       <a href="#problem">Problem</a>
       <a href="#solution">Solution</a>
-      <a href="#architecture">Architecture</a>
-      <a href="#technology">Technology</a>
       <a href="#results">Results</a>
+      <a href="#charts">Charts</a>
+      <a href="#findings">Findings</a>
       <a href="#dashboard">Dashboard</a>
+      <a href="#architecture">Architecture</a>
       <a href="#limitations">Limitations</a>
-      <a class="nav-github" href="https://github.com/vidurukalpana/atm-cash-optimizer">GitHub</a>
     </nav>
   </div>
 </header>
@@ -38,7 +38,7 @@
     <div class="wrap">
       <h1>Cash planning for ATMs and CRMs, driven by forecasts.</h1>
       <p class="lead">
-        Banks fill cash machines on simple rules. This project forecasts how much cash each
+        Banks fill cash machines on simple rules. This project predicts how much cash each
         machine will need and plans the cheapest van visits. Tested on 280 days of data, it cut
         cost by 35 to 42 percent.
       </p>
@@ -57,92 +57,142 @@
     </div>
   </section>
 
+  <!-- Problem -->
   <section id="problem" class="section">
     <div class="wrap narrow">
       <h2>The Problem</h2>
+      <p class="section-lead">A bank pays a security company to bring cash to its machines in armoured vans. Every day, for every machine, someone must decide: send a van or not, and how much cash to load.</p>
       <ul class="points">
         <li><b>Too little cash.</b> The machine runs empty. Customers leave, and an emergency van costs double.</li>
-        <li><b>Too much cash.</b> Money sits in the machine and earns no interest.</li>
+        <li><b>Too much cash.</b> Money sits in the machine. The bank could have earned interest on it.</li>
         <li><b>Every visit costs money.</b> A van trip to one machine costs around LKR 15,000.</li>
         <li><b>Simple rules miss the calendar.</b> Poya days, Avurudu and salary week change demand, and vans do not run on holidays.</li>
       </ul>
+
+      <h3 class="sub">Words on This Page</h3>
+      <dl class="glossary">
+        <div><dt>ATM</dt><dd>A machine that only gives out cash.</dd></div>
+        <div><dt>CRM</dt><dd>Cash recycler machine. It gives out cash and also takes deposits, so it can get too full.</dd></div>
+        <div><dt>Van visit</dt><dd>A trip by the cash company to load cash into a machine or take cash out.</dd></div>
+        <div><dt>Idle cash</dt><dd>Cash that sits in a machine overnight. It costs the bank about 8% a year in lost interest.</dd></div>
+        <div><dt>Ran empty</dt><dd>A day when a machine could not give customers all the cash they wanted.</dd></div>
+        <div><dt>LKR M</dt><dd>Millions of Sri Lankan rupees.</dd></div>
+      </dl>
     </div>
   </section>
 
+  <!-- Solution -->
   <section id="solution" class="section alt">
     <div class="wrap">
       <h2>The Solution</h2>
+      <p class="section-lead">We call it the <b>smart plan</b>. It works in three steps, every evening, for every machine.</p>
       <div class="steps">
         <div class="step">
           <span class="num">1</span>
           <h3>Forecast</h3>
-          <p>Predict each machine's demand for the next 14 days as a range, not one number.</p>
+          <p>Predict how much cash customers will take over the next 14 days, as a range.</p>
         </div>
         <div class="step">
           <span class="num">2</span>
           <h3>Plan</h3>
-          <p>Choose visit days and how many notes of each type to load, at the lowest total cost.</p>
+          <p>Choose the visit days and the notes to load, at the lowest total cost.</p>
         </div>
         <div class="step">
           <span class="num">3</span>
-          <h3>Test</h3>
-          <p>Replay past days and compare the plan with the rules banks use today.</p>
+          <h3>Act and repeat</h3>
+          <p>Send only tomorrow's decision. Plan again the next evening with fresh data.</p>
+        </div>
+      </div>
+
+      <h3 class="sub">How the Smart Plan Decides</h3>
+      <div class="explain">
+        <div class="example">
+          <span class="example-label">Example forecast for one ATM</span>
+          <p>Over the next 7 days, customers will most likely take <b>LKR 7.0M</b>.</p>
+          <p>We are 95% sure it will stay below <b>LKR 8.6M</b>.</p>
+        </div>
+        <ul class="points">
+          <li><b>A range, not one number.</b> A single guess is wrong half the time. The range tells the plan how much extra cash keeps the machine safe.</li>
+          <li><b>95% safety.</b> The plan loads enough for the high end of the range, not the middle. So the machine runs empty on very few days.</li>
+          <li><b>Lowest total cost.</b> More visits cost more in fees. Fewer visits mean more idle cash. The plan finds the cheapest balance.</li>
+          <li><b>Each note type on its own.</b> An ATM holds 5000, 1000 and 500 notes in separate boxes. The plan fills each box by what customers take from it.</li>
+          <li><b>Knows the calendar.</b> No visits on Poya days and public holidays, and orders go in one day ahead. Before a long weekend, it loads earlier.</li>
+          <li><b>CRMs too.</b> For machines that take deposits, the plan can also send a van to take cash out before the vault is full.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data -->
+  <section id="data" class="section">
+    <div class="wrap narrow">
+      <h2>The Data</h2>
+      <p class="section-lead">The project uses these two data sets.</p>
+      <div class="two">
+        <div class="card">
+          <h3>UK ATMs (real data)</h3>
+          <p>Daily withdrawals from 111 real ATMs in the UK, 1996 to 1998, from a public research data set (NN5). Amounts are converted to rupees.</p>
+          <p class="card-note">Used to check that the method works on real behaviour.</p>
+        </div>
+        <div class="card">
+          <h3>Sri Lanka (simulated)</h3>
+          <p>The same data, reshaped into a Sri Lankan network: dates moved to 2024 to 2026, Avurudu, Vesak, Poya days and salary week added, 35% of machines turned into CRMs.</p>
+          <p class="card-note">Used to show the full Sri Lankan use case.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="architecture" class="section">
+  <!-- Testing -->
+  <section id="testing" class="section alt">
     <div class="wrap">
-      <h2>Architecture</h2>
-      <p class="section-lead">Each step reads the previous step's tables, writes its own, and stops. Nothing runs in the background.</p>
-      <div class="flow">
-        <div class="box">ATM data<small>NN5, 111 machines</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box">Clean and validate<small>pandas, pandera</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box">Sri Lanka scenario<small>holidays, CRMs, notes</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box">Features<small>PySpark</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box">Forecasts<small>LightGBM quantiles</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box">Optimizer<small>PuLP + CBC</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box">Simulation<small>280 days replay</small></div>
-        <div class="arrow" aria-hidden="true"></div>
-        <div class="box box-end">Dashboard<small>Streamlit</small></div>
+      <h2>How We Tested It</h2>
+      <p class="section-lead">We replayed 280 past days, one day at a time, as if the bank had used each strategy. Each strategy only saw data up to that day, never the future.</p>
+      <div class="strategies">
+        <div class="strategy smart">
+          <h3>Smart plan</h3>
+          <p>Our method: forecast plus planning, as described above. Tried at 90% and 95% safety.</p>
+        </div>
+        <div class="strategy">
+          <h3>Refill rule</h3>
+          <p>Send a van when cash drops below a set level, and fill the machine to the top. Tried at 20%, 30% and 40%.</p>
+        </div>
+        <div class="strategy">
+          <h3>Weekly visit</h3>
+          <p>A van fills every machine to the top on the same day each week, needed or not.</p>
+        </div>
       </div>
-      <p class="built-with"><b>Built with</b> Python, pandas, DuckDB, PySpark, LightGBM, statsforecast, PuLP, MLflow, Streamlit and Plotly.</p>
-    </div>
-  </section>
+      <p class="note">The <b>best simple rule</b> is the cheapest of the refill rules and the weekly visit. The smart plan is compared against it, so the comparison is fair.</p>
 
-  <section id="technology" class="section alt">
-    <div class="wrap">
-      <h2>Technology Choices</h2>
+      <h3 class="sub">Same rules for everyone</h3>
+      <ul class="points cols">
+        <li>10 machines per data set, picked at random.</li>
+        <li>Same machine sizes, holidays and one-day order time.</li>
+        <li>If a machine runs empty, an emergency van comes the next day.</li>
+        <li>The first 14 days are not counted, so every strategy starts settled.</li>
+      </ul>
+
+      <h3 class="sub">What counts as cost</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Need</th><th>Choice</th><th>Why</th></tr></thead>
+          <thead><tr><th>Cost</th><th>Amount used</th></tr></thead>
           <tbody>
-            <tr><td>Storage</td><td>Parquet + DuckDB</td><td>SQL on plain files. No database server to run.</td></tr>
-            <tr><td>Feature building</td><td>PySpark</td><td>Each day becomes 14 training rows. Spark scales this to larger networks.</td></tr>
-            <tr><td>Forecasting</td><td>LightGBM, quantile loss</td><td>Gives a range (q05 to q98), so the plan can keep a safety buffer.</td></tr>
-            <tr><td>Benchmarks</td><td>statsforecast</td><td>Simple methods the model must beat to be worth it.</td></tr>
-            <tr><td>Planning</td><td>PuLP + CBC</td><td>Finds the cheapest plan that follows every rule. Free solver.</td></tr>
-            <tr><td>Experiment tracking</td><td>MLflow</td><td>Keeps every run's settings and scores, so results can be compared.</td></tr>
-            <tr><td>Dashboard</td><td>Streamlit + Plotly</td><td>Python only. Reads the results directly.</td></tr>
-            <tr><td>Data checks</td><td>pydantic + pandera</td><td>Wrong settings or broken data fail early.</td></tr>
+            <tr><td>Planned van visit</td><td>LKR 15,000 per visit</td></tr>
+            <tr><td>Emergency van visit</td><td>LKR 30,000 per visit</td></tr>
+            <tr><td>Idle cash</td><td>8% a year on cash left in the machine overnight</td></tr>
+            <tr><td>Machine ran empty</td><td>LKR 25,000 per day, for unhappy customers and lost fees</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note"><b>Left out on purpose:</b> Prefect, FastAPI, monitoring and Docker. They suit an always-running system. This project runs in batches on a laptop, with at most 4 CPU cores.</p>
+      <p class="note">These amounts are estimates. A bank would replace them with its own figures.</p>
     </div>
   </section>
 
+  <!-- Results -->
   <section id="results" class="section">
     <div class="wrap">
       <h2>Results</h2>
-      <p class="section-lead">280 days replayed on 10 machines per data set. Every strategy followed the same capacity, holiday and lead-time rules.</p>
+      <p class="section-lead">Total cost over the replayed days, for all 10 machines together.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -154,68 +204,197 @@
           </tbody>
         </table>
       </div>
-      <p class="note">The best simple rule was "refill when cash drops below 20%". Most of the saving comes from less idle cash: the rules fill machines to the top, the smart plan loads what is needed.</p>
+      <p class="note">On both data sets, the best simple rule was "refill when cash drops below 20%". The weekly visit was the most expensive: LKR 23.30M on the Sri Lanka data, with 103 emergency visits.</p>
 
       <h3 class="sub">Forecast accuracy</h3>
+      <p class="note top">How far the forecast for the next 14 days was from what really happened, on average. Lower is better.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Data set</th><th>LightGBM</th><th>Best simple forecast</th></tr></thead>
+          <thead><tr><th>Data set</th><th>Our forecast</th><th>Best simple forecast</th></tr></thead>
           <tbody>
             <tr><td>Sri Lanka (simulated)</td><td class="good">LKR 1.96M</td><td>LKR 2.26M</td></tr>
             <tr><td>UK ATMs (real data)</td><td>LKR 1.63M</td><td class="good">LKR 1.52M</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">Average error of the 14-day total. Lower is better.</p>
+      <p class="note">The best simple forecast is the average of the same weekday over the last four weeks.</p>
     </div>
   </section>
 
-  <section id="dashboard" class="section alt">
+  <!-- Charts -->
+  <section id="charts" class="section alt">
     <div class="wrap">
-      <h2>Dashboard</h2>
-      <div class="gallery">
-        <figure><img src="images/overview.png" alt="Overview page" data-label="Overview"><figcaption><b>Overview.</b> The data set at a glance.</figcaption></figure>
-        <figure><img src="images/cash-status.png" alt="Cash Status page" data-label="Cash Status"><figcaption><b>Cash Status.</b> Every machine's cash and alerts.</figcaption></figure>
-        <figure><img src="images/machine-insights.png" alt="Machine Insights page" data-label="Machine Insights"><figcaption><b>Machine Insights.</b> One machine's forecast range and cash history.</figcaption></figure>
-        <figure><img src="images/results.png" alt="Results page" data-label="Results"><figcaption><b>Results.</b> Each strategy's cost and empty days.</figcaption></figure>
+      <h2>Results in Charts</h2>
+      <p class="section-lead">The same results, as the dashboard shows them. Click a chart to enlarge it.</p>
+
+      <figure class="chart">
+        <img src="images/chart-strategy-comparison.png" alt="Total cost and days ran empty for each strategy" data-label="Strategy comparison">
+        <figcaption>
+          <h3>Cost and empty days of every strategy</h3>
+          <p>Each bar is one strategy. The left chart shows total cost, the right chart shows how often a machine ran empty. Shorter is better in both.</p>
+          <p>The smart plan (blue) is at the top of both charts: the lowest cost and the fewest empty days. The weekly visit (grey) is at the bottom.</p>
+        </figcaption>
+      </figure>
+
+      <figure class="chart">
+        <img src="images/chart-by-location.png" alt="Cost of each strategy by machine location" data-label="Cost by location">
+        <figcaption>
+          <h3>Cost by machine location</h3>
+          <p>The cost of each strategy, split by where the machines are: branch, bus stand, residential area or supermarket.</p>
+          <p>The smart plan is cheapest at every location, not just on average. The gap is largest at busy places like supermarkets.</p>
+        </figcaption>
+      </figure>
+
+      <figure class="chart">
+        <img src="images/chart-machine-cash.png" alt="Cash in one machine over time" data-label="Cash in one machine">
+        <figcaption>
+          <h3>Cash in one machine over time</h3>
+          <p>The blue line is the cash inside one supermarket ATM under the smart plan. Triangles are van visits. The dashed line is the most the machine can hold.</p>
+          <p>The machine starts full. The plan lets the extra cash run down, then keeps it low with small, regular visits. A simple rule would fill it to the top every time.</p>
+          <p>The single red cross is a day when one note type ran out, even though other notes were still inside.</p>
+        </figcaption>
+      </figure>
+
+      <figure class="chart">
+        <img src="images/chart-machine-forecast.png" alt="Demand forecast for one machine against what happened" data-label="Forecast for one machine">
+        <figcaption>
+          <h3>Forecast against what really happened</h3>
+          <p>One machine, forecast on one day for the next two weeks. The blue line is the most likely total cash taken. The light band is the likely range. The dark line is what customers really took.</p>
+          <p>Here customers took less than the most likely value, but stayed inside the band. The plan loads enough cash for the top of the band, so the machine did not run empty.</p>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- Findings -->
+  <section id="findings" class="section alt">
+    <div class="wrap">
+      <h2>What We Found</h2>
+      <div class="findings">
+        <div class="finding-group">
+          <h3>About cash demand</h3>
+          <ul>
+            <li>The week drives demand. Thursday is the busiest day, about 1.5 times an average day. Saturday is the quietest.</li>
+            <li>December is the busiest month and January the quietest.</li>
+            <li>Demand rises about 7% around the end of the month, when salaries are paid.</li>
+            <li>Demand grew about 7.6% a year in the real data.</li>
+            <li>Machines fall into three groups: steady ones, busy ones with big swings, and a small group with a different weekly pattern.</li>
+          </ul>
+        </div>
+        <div class="finding-group">
+          <h3>About the plan</h3>
+          <ul>
+            <li>Most of the saving comes from less idle cash. On the Sri Lanka data, machines held LKR 4.0M on average under the smart plan, against LKR 18.1M under the best rule.</li>
+            <li>The smart plan visits more often but loads less each time. The interest saved is much larger than the extra fees.</li>
+            <li>Simple rules fill to the top, but the small 1000 and 500 note boxes still run out between visits. Planning each note type fixed this: ATMs ran empty on 0.8% of days instead of 5.7%.</li>
+            <li>CRMs also cost less (17%), but ran empty on a few days, where the refill rule had none.</li>
+            <li>A weekly visit cannot keep up with busy machines. It needed 103 emergency visits.</li>
+          </ul>
+        </div>
+        <div class="finding-group">
+          <h3>About the forecast</h3>
+          <ul>
+            <li>On the Sri Lanka data, our forecast beat every simple method, by 8% for tomorrow up to 27% for the next week.</li>
+            <li>On the real UK data, the weekly pattern is so regular that a simple four-week average is hard to beat.</li>
+            <li>The real value of our forecast is the range. It tells the plan how much safety cash to keep.</li>
+            <li>The "95% safe" level really covered about 93% of days. Close, but slightly optimistic.</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
 
+  <!-- Success -->
   <section id="success" class="section">
     <div class="wrap narrow">
       <h2>Was It Successful?</h2>
       <div class="checks">
         <div class="check yes"><span>Yes</span><p><b>Lower cost.</b> 35 to 42 percent cheaper than the best simple rule.</p></div>
         <div class="check yes"><span>Yes</span><p><b>Fewer empty machines</b> on the Sri Lanka network: 0.8% of days instead of 3.4%.</p></div>
-        <div class="check partly"><span>Partly</span><p><b>Better forecasts.</b> Clearly better on the Sri Lanka data. On real UK data the middle forecast is close to a simple weekly average; its value is the range used for safety stock.</p></div>
+        <div class="check partly"><span>Partly</span><p><b>Better forecasts.</b> Clearly better on the Sri Lanka data. On real UK data the most likely value is close to a simple weekly average.</p></div>
         <div class="check partly"><span>Partly</span><p><b>No empty machines on real data.</b> A few empty days (0.2%), against none for the best rule, but at a much lower cost.</p></div>
-        <div class="check yes"><span>Yes</span><p><b>Runs on a laptop.</b> Each step finishes in under 5 minutes on 4 cores. 71 automated tests run on every push.</p></div>
+        <div class="check yes"><span>Yes</span><p><b>Runs on a laptop.</b> Each step finishes in under 5 minutes. 71 automated tests check the code on every change.</p></div>
       </div>
     </div>
   </section>
 
-  <section id="limitations" class="section alt">
+  <!-- Dashboard -->
+  <section id="dashboard" class="section alt">
+    <div class="wrap">
+      <h2>Dashboard</h2>
+      <p class="section-lead">A web dashboard shows the results to a cash planning team. Click a screenshot to enlarge it.</p>
+      <div class="gallery">
+        <figure><img src="images/overview.png" alt="Overview page" data-label="Overview"><figcaption><b>Overview.</b> The data set at a glance.</figcaption></figure>
+        <figure><img src="images/cash-status.png" alt="Cash Status page" data-label="Cash Status"><figcaption><b>Cash Status.</b> Every machine's cash, and which need attention.</figcaption></figure>
+        <figure><img src="images/machine-insights.png" alt="Machine Insights page" data-label="Machine Insights"><figcaption><b>Machine Insights.</b> One machine's forecast range and cash over time.</figcaption></figure>
+        <figure><img src="images/results.png" alt="Results page" data-label="Results"><figcaption><b>Results.</b> Each strategy's cost and empty days.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture" class="section">
+    <div class="wrap">
+      <h2>Architecture</h2>
+      <p class="section-lead">Each step reads the previous step's results, saves its own, and stops. Nothing runs in the background.</p>
+      <div class="flow">
+        <div class="box">ATM data<small>NN5, 111 machines</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box">Clean and check<small>pandas, pandera</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box">Sri Lanka scenario<small>holidays, CRMs, notes</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box">Features<small>PySpark</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box">Forecasts<small>LightGBM</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box">Planning<small>PuLP + CBC</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box">Testing<small>280 days replay</small></div>
+        <div class="arrow" aria-hidden="true"></div>
+        <div class="box box-end">Dashboard<small>Streamlit</small></div>
+      </div>
+      <p class="built-with"><b>Built with</b> Python, pandas, DuckDB, PySpark, LightGBM, statsforecast, PuLP, MLflow, Streamlit and Plotly.</p>
+    </div>
+  </section>
+
+  <!-- Technology -->
+  <section id="technology" class="section alt">
+    <div class="wrap">
+      <h2>Technology Choices</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Need</th><th>Choice</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Storage</td><td>Parquet + DuckDB</td><td>SQL on plain files. No database server to run.</td></tr>
+            <tr><td>Preparing training data</td><td>PySpark</td><td>Each day becomes 14 training rows. Spark scales this to larger networks.</td></tr>
+            <tr><td>Forecasting</td><td>LightGBM</td><td>Predicts a range, not only one number, so the plan can keep safety cash.</td></tr>
+            <tr><td>Simple forecasts to compare with</td><td>statsforecast</td><td>Standard methods the model must beat to be worth it.</td></tr>
+            <tr><td>Planning</td><td>PuLP + CBC</td><td>Finds the cheapest plan that follows every rule. Free to use.</td></tr>
+            <tr><td>Keeping track of experiments</td><td>MLflow</td><td>Saves every run's settings and scores, so runs can be compared.</td></tr>
+            <tr><td>Dashboard</td><td>Streamlit + Plotly</td><td>Built in Python. Reads the saved results directly.</td></tr>
+            <tr><td>Checking data and settings</td><td>pydantic + pandera</td><td>Wrong settings or broken data stop the run early.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Limitations -->
+  <section id="limitations" class="section">
     <div class="wrap narrow">
       <h2>Limitations</h2>
       <ul class="points">
-        <li><b>The Sri Lanka data is simulated.</b> No real bank data was available, so it is built from UK data with assumed holidays, locations and note mix. The forecast learns some of those assumptions back.</li>
-        <li><b>The real data is old.</b> NN5 covers 111 UK ATMs from 1996 to 1998.</li>
-        <li><b>Costs are estimates.</b> Visit fees, interest and penalties are placeholders, not bank figures.</li>
-        <li><b>Small simulation sample.</b> 10 machines per data set, to keep each run short.</li>
-        <li><b>Batch only.</b> It runs on saved data. It does not connect to live machines or a cash-in-transit company.</li>
+        <li><b>The Sri Lanka data is simulated.</b> It is built from UK data with assumed holidays, locations and note mix. The forecast learns some of those assumptions back, so results there look better than they would in real life.</li>
+        <li><b>The real data is old.</b> It covers UK ATMs from 1996 to 1998.</li>
+        <li><b>Costs are estimates.</b> Visit fees, interest and penalties are not real bank figures.</li>
+        <li><b>Small test sample.</b> 10 machines per data set, to keep each run short.</li>
+        <li><b>Not live.</b> It runs on saved data. It does not connect to real machines or a cash company.</li>
       </ul>
     </div>
   </section>
 
 </main>
-
-<footer class="footer">
-  <div class="wrap footer-inner">
-    <a class="logo" href="#top"><span class="logo-mark" aria-hidden="true"></span>ATM Cash Optimizer</a>
-    <p>Source code on <a href="https://github.com/vidurukalpana/atm-cash-optimizer">GitHub</a>. Built by <a href="https://github.com/vidurukalpana">vidurukalpana</a>.</p>
-  </div>
-</footer>
 
 <div class="lightbox" hidden>
   <button class="lightbox-close" aria-label="Close">Close</button>

@@ -31,10 +31,10 @@ with st.expander("What Do These Mean?"):
 empty_gap = 100 * (result["optimizer_stockout_rate"] - result["baseline_stockout_rate"])
 cols = st.columns(4)
 cols[0].metric("Cost Saving", f"{result['saving_pct']:.1f}%")
-cols[1].metric("Smart Plan Cost", ui.lkr_millions(result["optimizer_cost"]))
-cols[2].metric("Best Simple Rule Cost", ui.lkr_millions(result["baseline_cost"]))
+cols[1].metric("Smart Plan Cost (LKR)", ui.lkr_millions(result["optimizer_cost"]))
+cols[2].metric("Best Rule Cost (LKR)", ui.lkr_millions(result["baseline_cost"]))
 cols[3].metric(
-    "Days Machines Ran Empty",
+    "Days Ran Empty",
     f"{result['optimizer_stockout_rate']:.2%}",
     delta=f"{empty_gap:+.2f} pts vs best rule",
     delta_color="inverse",
@@ -56,7 +56,10 @@ def ranked_bars(column: str, scale: float, label: str, fmt: str):
     fig = ui.style_figure(fig, height=330)
     fig.update_traces(texttemplate=fmt, textposition="outside", cliponaxis=False)
     fig.update_layout(showlegend=False)
-    fig.update_xaxes(title=label, showgrid=False, showticklabels=False)
+    # Room on the right for the value written after the longest bar.
+    fig.update_xaxes(
+        title=label, showgrid=False, showticklabels=False, range=[0, 1.18 * df["value"].max()]
+    )
     fig.update_yaxes(title=None)
     return fig
 
@@ -97,7 +100,10 @@ if parts:
     for tab, (by, part) in zip(st.tabs([segments[b] for b in parts]), parts.items(), strict=True):
         with tab:
             bars = px.bar(
-                part.assign(total_cost=part["total_cost"] / 1e6),
+                part.assign(
+                    total_cost=part["total_cost"] / 1e6,
+                    **{by: part[by].str.replace("_", " ").str.title()},
+                ),
                 x=by,
                 y="total_cost",
                 color="policy",

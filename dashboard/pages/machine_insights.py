@@ -53,8 +53,8 @@ run = runs.set_index("machine_id").loc[machine_id]
 cols = st.columns(4)
 cols[0].metric("Van Visits", int(run["visits"]))
 cols[1].metric("Days Ran Empty", int(run["stockout_days"]))
-cols[2].metric("Average Cash", ui.lkr_millions(run["avg_idle_cash"]))
-cols[3].metric("Total Cost", ui.lkr_millions(run["total_cost"]))
+cols[2].metric("Average Cash (LKR)", ui.lkr_millions(run["avg_idle_cash"]))
+cols[3].metric("Total Cost (LKR)", ui.lkr_millions(run["total_cost"]))
 
 daily = sim_daily(track)
 daily = daily[
