@@ -82,3 +82,13 @@ python -m atm_cash_optimizer.forecasting.train --track lk      # ~4.5 min, 4 cor
 
 Writes `forecasts_<track>` (`model = quantile_lgbm`), `calibration_<track>`,
 `reports/forecast_comparison_<track>.md` and MLflow experiment `forecast-quantile`.
+
+## Replenishment optimizer (MILP)
+
+```bash
+# plan all machines for one origin date and print the decisions (writes nothing; ~3 s, 4 cores)
+python -m atm_cash_optimizer.optimization.planner --track lk --date 2025-08-10 --alpha 0.95
+```
+
+One PuLP/CBC model per machine (ATMs per denomination, CRMs on total cash with removals);
+`plan_all(...)` in `optimization/planner.py` is what the simulation calls every day.
