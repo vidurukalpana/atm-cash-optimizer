@@ -17,6 +17,8 @@ from pathlib import Path
 
 import duckdb
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,14 @@ def write_table(df: pd.DataFrame, name: str, data_dir: str | Path | None = None)
     root = get_data_dir(data_dir)
     parquet_path = root / "processed" / f"{name}.parquet"
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(parquet_path, index=False)
+
+    # Day-level datetime columns are stored as Parquet DATE: the data contract says "date",
+    # and Spark cannot read pandas' nanosecond timestamps.
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    for i, field in enumerate(table.schema):
+        if pa.types.is_timestamp(field.type) and _is_day_level(df[field.name]):
+            table = table.set_column(i, field.name, table.column(i).cast(pa.date32()))
+    pq.write_table(table, parquet_path)
 
     with duckdb.connect(str(root / WAREHOUSE_FILE)) as con:
         con.execute(
@@ -81,7 +90,37 @@ def read_table(name: str, data_dir: str | Path | None = None) -> pd.DataFrame:
     path = get_data_dir(data_dir) / "processed" / f"{name}.parquet"
     if not path.is_file():
         raise FileNotFoundError(f"table {name!r} not found at {path}")
-    return pd.read_parquet(path)
+    df = pd.read_parquet(path)
+    # DATE columns come back as Python dates; turn them into datetimes for the .dt accessor.
+    for field in pq.read_schema(path):
+        if pa.types.is_date(field.type):
+            df[field.name] = pd.to_datetime(df[field.name]).astype("datetime64[ns]")
+    return df
+
+
+def table_path(name: str, data_dir: str | Path | None = None) -> Path:
+    """Path of the Parquet file of table ``name`` (for readers such as Spark)."""
+    _check_name(name)
+    return get_data_dir(data_dir) / "processed" / f"{name}.parquet"
+
+
+def register_parquet_view(name: str, path: str | Path, data_dir: str | Path | None = None) -> None:
+    """Expose a (Hive-partitioned) Parquet directory written by Spark as a DuckDB view.
+
+    A view, not a copy: DuckDB reads the Parquet files when queried.
+    """
+    _check_name(name)
+    pattern = str(Path(path) / "**" / "*.parquet").replace("'", "''")
+    with duckdb.connect(str(get_data_dir(data_dir) / WAREHOUSE_FILE)) as con:
+        con.execute(
+            f"CREATE OR REPLACE VIEW {name} AS "
+            f"SELECT * FROM read_parquet('{pattern}', hive_partitioning = true)"
+        )
+    logger.info("Registered view %s on %s", name, path)
+
+
+def _is_day_level(s: pd.Series) -> bool:
+    return bool((s.dropna() == s.dropna().dt.normalize()).all())
 
 
 def query(sql: str, data_dir: str | Path | None = None) -> pd.DataFrame:

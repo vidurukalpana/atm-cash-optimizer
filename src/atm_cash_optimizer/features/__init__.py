@@ -1,1 +1,1 @@
-"""features subpackage (implemented in a later branch)."""
+"""Origin–horizon feature tables for forecasting, built with PySpark."""
