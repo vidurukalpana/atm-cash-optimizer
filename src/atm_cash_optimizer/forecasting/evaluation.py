@@ -21,12 +21,13 @@ import pandas as pd
 
 from atm_cash_optimizer.config import load_config
 from atm_cash_optimizer.forecasting.backtest import SeriesPanel, cumulative_actuals
-from atm_cash_optimizer.io import read_table
+from atm_cash_optimizer.io import DEFAULT_DATA_DIR, read_table
 from atm_cash_optimizer.scenario.transform import uk_holiday_mask
 
 KEYS = ["machine_id", "target", "origin_date", "h"]
 SEGMENT_TYPES = ("all", "calendar", "location_type", "machine_type")
 INTERVAL = (0.05, 0.95)
+MLFLOW_DIR = DEFAULT_DATA_DIR.parent / "mlruns"
 
 
 def quantile_column(q: float) -> str:
@@ -65,6 +66,40 @@ def pinball(actual: np.ndarray, forecast: np.ndarray, q: float) -> float:
 def coverage(actual: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> float:
     """Share of actuals within ``[lower, upper]``."""
     return float(np.mean((actual >= lower) & (actual <= upper)))
+
+
+def quantile_coverage(actual: np.ndarray, forecast: np.ndarray) -> float:
+    """Share of actuals at or below a quantile forecast (should be close to its level)."""
+    return float(np.mean(actual <= forecast))
+
+
+def pinball_by_quantile(
+    df: pd.DataFrame, quantiles: list[float], horizons: list[int]
+) -> pd.DataFrame:
+    """Pinball loss of each quantile forecast per target and horizon (rows need ``actual``).
+
+    Returns:
+        ``target, h, quantile, pinball``.
+    """
+    df = df[df["h"].isin(horizons) & df["actual"].notna()]
+    rows = []
+    for (target, h), group in df.groupby(["target", "h"]):
+        actual = group["actual"].to_numpy()
+        for q in quantiles:
+            loss = pinball(actual, group[quantile_column(q)].to_numpy(), q)
+            rows.append({"target": target, "h": h, "quantile": q, "pinball": loss})
+    return pd.DataFrame(rows)
+
+
+def use_mlflow_experiment(name: str) -> None:
+    """Point MLflow at ``mlruns/`` (SQLite + artifacts) and select experiment ``name``."""
+    import mlflow
+
+    MLFLOW_DIR.mkdir(exist_ok=True)
+    mlflow.set_tracking_uri(f"sqlite:///{MLFLOW_DIR / 'mlflow.db'}")
+    if mlflow.get_experiment_by_name(name) is None:
+        mlflow.create_experiment(name, artifact_location=str(MLFLOW_DIR / "artifacts"))
+    mlflow.set_experiment(name)
 
 
 # --------------------------------------------------------------------------------------------

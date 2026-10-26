@@ -15,4 +15,8 @@ lightgbm:
   colsample_bytree: 0.8
 n_jobs: 4                        # CPU cores for parallel work (of 10) — keeps the Mac cool
 ets_train_days: 364              # baseline C (AutoETS) fits on the last year only
+quantile_retrain_every_days: 28  # LightGBM quantile models are retrained every 4 weeks
+quantile_train_days: 364         # ... on the last year of fully observed labels
+train_origin_step: 3             # ... using every 3rd origin (not a multiple of 7: all weekdays)
+calibration_tolerance: 0.02      # shift a quantile when its coverage misses by > 2 points
 seed: 42

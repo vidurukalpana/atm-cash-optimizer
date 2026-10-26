@@ -119,6 +119,15 @@ def register_parquet_view(name: str, path: str | Path, data_dir: str | Path | No
     logger.info("Registered view %s on %s", name, path)
 
 
+def markdown_table(df: pd.DataFrame, floatfmt: str = "{:.2f}") -> str:
+    """Render ``df`` as a GitHub markdown table (floats formatted with ``floatfmt``)."""
+    cells = df.map(lambda v: floatfmt.format(v) if isinstance(v, float) else str(v))
+    header = "| " + " | ".join(map(str, cells.columns)) + " |"
+    rule = "|" + "---|" * len(cells.columns)
+    rows = ["| " + " | ".join(row) + " |" for row in cells.to_numpy()]
+    return "\n".join([header, rule, *rows])
+
+
 def _is_day_level(s: pd.Series) -> bool:
     return bool((s.dropna() == s.dropna().dt.normalize()).all())
 

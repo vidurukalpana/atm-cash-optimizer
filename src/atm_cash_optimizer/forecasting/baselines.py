@@ -36,15 +36,14 @@ from atm_cash_optimizer.forecasting.backtest import (
     history_slice,
     load_series,
     origin_indices,
+    save_forecasts,
 )
-from atm_cash_optimizer.io import DEFAULT_DATA_DIR, read_table, write_table
 
 logger = logging.getLogger(__name__)
 
 MODELS = ("A", "B", "C")
 WEEK = 7
 SEASON_LENGTH = 7
-MLFLOW_DIR = DEFAULT_DATA_DIR.parent / "mlruns"
 EXPERIMENT = "forecast-baselines"
 WORKER_THREAD_VARS = (
     "NUMBA_NUM_THREADS",
@@ -158,36 +157,13 @@ def to_frame(
 # --------------------------------------------------------------------------------------------
 
 
-def _mlflow_experiment() -> None:
-    import mlflow
-
-    MLFLOW_DIR.mkdir(exist_ok=True)
-    mlflow.set_tracking_uri(f"sqlite:///{MLFLOW_DIR / 'mlflow.db'}")
-    if mlflow.get_experiment_by_name(EXPERIMENT) is None:
-        mlflow.create_experiment(EXPERIMENT, artifact_location=str(MLFLOW_DIR / "artifacts"))
-    mlflow.set_experiment(EXPERIMENT)
-
-
-def _save_forecasts(track: str, new: pd.DataFrame) -> None:
-    # Replace only the models that were just run; keep other models' rows in the table.
-    name = f"forecasts_{track}"
-    try:
-        existing = read_table(name)
-        new = pd.concat(
-            [existing[~existing["model"].isin(new["model"].unique())], new], ignore_index=True
-        )
-    except FileNotFoundError:
-        pass
-    write_table(new, name)
-
-
 def run(tracks: tuple[str, ...] = TRACKS, models: tuple[str, ...] = MODELS) -> None:
     """Backtest the baselines, write ``forecasts_<track>`` and log metrics to MLflow."""
     import mlflow
 
     model_cfg = load_config("model")
     backtest_cfg = load_config("backtest")
-    _mlflow_experiment()
+    evaluation.use_mlflow_experiment(EXPERIMENT)
 
     for track in tracks:
         panel = load_series(track)
@@ -230,7 +206,7 @@ def run(tracks: tuple[str, ...] = TRACKS, models: tuple[str, ...] = MODELS) -> N
                 "%s baseline_%s: %.1fs, %s", track, model, seconds, evaluation.headline(metrics)
             )
 
-        _save_forecasts(track, pd.concat(frames, ignore_index=True))
+        save_forecasts(track, pd.concat(frames, ignore_index=True))
 
 
 def main() -> None:
