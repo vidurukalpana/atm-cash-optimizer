@@ -106,3 +106,12 @@ Compares a fixed Monday schedule, refill-below-threshold rules and the optimizer
 rules. Writes `sim_daily_<track>`, `sim_summary_<track>`, `orders_<track>`
 (+ `data/orders/orders_<track>.csv`), `reports/results_<track>.md` and
 `reports/frontier_<track>.html`.
+
+## Dashboard
+
+```bash
+streamlit run dashboard/app.py      # opens http://localhost:8501; stop with Ctrl+C
+```
+
+Pages: Overview, Cash Status, Machine Insights and Results. The dashboard only reads the saved
+results (run the steps above first) and shows a SIMULATED DATA badge for the Sri Lanka data set.
