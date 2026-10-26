@@ -223,6 +223,7 @@ class BacktestConfig(_Config):
     test_days: PositiveInt
     warmup_days: NonNegativeInt
     report_horizons: list[PositiveInt] = Field(min_length=1)
+    simulation_machines: PositiveInt
     sweeps: SweepsConfig
     fixed_schedule_weekday: Annotated[int, Field(ge=0, le=6)]
     sensitivity: SensitivityConfig
