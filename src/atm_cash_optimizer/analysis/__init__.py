@@ -1,1 +1,1 @@
-"""Exploratory analysis: demand profiles and machine clustering."""
+"""Exploratory analysis: demand profiles and machine clusters."""

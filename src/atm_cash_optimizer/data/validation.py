@@ -1,4 +1,4 @@
-"""pandera schema for the ``nn5_daily`` table (see the data contracts in the plan)."""
+"""pandera schema of the ``nn5_daily`` table."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import pandera.pandas as pa
 
 
 def _dates_continuous(df: pd.DataFrame) -> bool:
-    # Every machine's dates step by exactly one day.
     steps = df.sort_values("date").groupby("machine_id")["date"].diff().dropna()
     return bool((steps == pd.Timedelta(days=1)).all())
 
@@ -35,9 +34,5 @@ NN5_DAILY_SCHEMA = pa.DataFrameSchema(
 
 
 def validate_nn5_daily(df: pd.DataFrame) -> pd.DataFrame:
-    """Validate ``df`` against :data:`NN5_DAILY_SCHEMA`; raise on any failure.
-
-    Raises:
-        pandera.errors.SchemaErrors: Listing every failed rule.
-    """
+    """Raise ``SchemaErrors`` listing every failed rule; return ``df`` if valid."""
     return NN5_DAILY_SCHEMA.validate(df, lazy=True)

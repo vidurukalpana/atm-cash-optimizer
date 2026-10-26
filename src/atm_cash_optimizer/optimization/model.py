@@ -1,11 +1,9 @@
-"""Mixed-integer linear programs (MILP) that plan visits for one machine.
+"""MILP plans for one machine (PuLP + CBC).
 
-Notation (see ``docs/DEVELOPMENT_PLAN.md``, branch 9): days ``t = 1..H``, denominations ``d``.
-``U_t`` is the ``alpha``-quantile and ``M_t`` the median of cumulative demand ``C(o, t)``
-(``M_0 = 0``). ``y_t`` = visit on day ``t``; ``b_{d,t}`` = bundles loaded;
-``X_{d,t} = B_d·b_{d,t}``.
+Days ``t = 1..H``, denominations ``d``. ``U_t``/``M_t``: alpha-quantile/median of cumulative
+demand. ``y_t``: visit; ``b_{d,t}``: bundles; ``X_{d,t} = B_d·b_{d,t}``; ``s_d``: demand share.
 
-ATM, per denomination (demand split by shares ``s_d``):
+ATM, per denomination:
 
 1. ``X_{d,t} <= cap_d · y_t``
 2. ``y_t = 0`` on no-service days and before the lead time
@@ -18,11 +16,10 @@ CRM, on total cash with removals ``r_t`` and net-outflow quantiles ``N``:
 
 - empty-safety: ``I0 + ΣX − Σr + slack_t >= Q_alpha(N_t)``
 - full-safety: ``I0 + ΣX − Σr − Q_{1−alpha}(N_t) − full_t <= vault_capacity``
-- removals only on visit days, and never more than the cash expected in the machine
+- removals only on visit days and never above the expected cash
 - idle cost on ``I0 + ΣX − Σr − Q_0.5(N_t)``
 
-Slack variables keep every problem feasible: when a rule cannot be met (demand above capacity,
-no possible visit), the plan breaks it at a high penalty and is flagged ``used_slack``.
+Slack keeps every problem feasible; a plan that needs it is flagged ``used_slack``.
 """
 
 from __future__ import annotations
@@ -39,13 +36,13 @@ from atm_cash_optimizer.optimization.types import (
     Visit,
 )
 
-SOLVER_TIME_LIMIT = 10  # seconds per machine (fixed by the development plan)
+SOLVER_TIME_LIMIT = 10  # seconds per machine
 SLACK_TOLERANCE = 1e-6
 DAYS_PER_YEAR = 365
 
 
 def _solver() -> pulp.LpSolver:
-    # One thread per problem: machines are solved in parallel by the planner instead.
+    # One thread per problem; the planner runs machines in parallel instead.
     return pulp.PULP_CBC_CMD(msg=False, timeLimit=SOLVER_TIME_LIMIT, threads=1)
 
 
@@ -63,7 +60,7 @@ def solve_atm(
     settings: PlanSettings,
     no_service_days: set[int],
 ) -> Plan:
-    """Cheapest visit plan for an ATM over the forecast window (see module docstring)."""
+    """Cheapest visit plan for an ATM."""
     days = range(1, window.horizon + 1)
     upper = window.get(settings.alpha)
     median = window.get(0.5)
@@ -131,7 +128,7 @@ def solve_crm(
     no_service_days: set[int],
     vault_capacity: float,
 ) -> Plan:
-    """Cheapest load/remove plan for a CRM on total cash (see module docstring)."""
+    """Cheapest load/remove plan for a CRM."""
     days = range(1, window.horizon + 1)
     upper = window.get(settings.alpha)
     lower = window.lower(1 - settings.alpha)

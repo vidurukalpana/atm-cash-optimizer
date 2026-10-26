@@ -1,18 +1,8 @@
-"""Group machines with similar demand behaviour and write ``machine_clusters``.
+"""Cluster machines by demand behaviour and write ``machine_clusters`` + the EDA summary.
 
-Features per machine (see :func:`machine_features`):
+Features: weekday shape (7 values), volatility (cv) and level. KMeans picks k by silhouette.
 
-- normalized weekday profile (7 values, mean 1) — the *shape* of the week;
-- coefficient of variation — how volatile the machine is;
-- level — mean daily withdrawals.
-
-Features are standardized, then KMeans is fitted for every k in :data:`K_RANGE` and the k with
-the best silhouette score is kept. Each cluster gets a readable label — ``steady``,
-``weekend_heavy`` or ``volatile`` — by rules on its centroid (see :func:`label_clusters`).
-
-Run with::
-
-    python -m atm_cash_optimizer.analysis.clustering
+Run: ``python -m atm_cash_optimizer.analysis.clustering``
 """
 
 from __future__ import annotations
@@ -27,6 +17,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
+from atm_cash_optimizer import setup_logging
 from atm_cash_optimizer.analysis.profiles import (
     VALUE_COL,
     coefficient_of_variation,
@@ -41,28 +32,21 @@ from atm_cash_optimizer.io import get_reports_dir, markdown_table, read_table, w
 logger = logging.getLogger(__name__)
 
 K_RANGE = range(2, 7)
-"""Numbers of clusters tried (fixed by the development plan)."""
 KMEANS_N_INIT = 10
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-NN5_HOLIDAY_COUNTRY = ("GB", "ENG")  # NN5 machines are in the UK; England's bank holidays
+NN5_HOLIDAY_COUNTRY = ("GB", "ENG")  # NN5 is UK data
 
 
 @dataclass(frozen=True)
 class ClusteringResult:
-    """Output of :func:`cluster_machines`."""
-
-    clusters: pd.DataFrame
-    """``machine_id``, ``cluster_id``, ``cluster_label`` (cluster 0 = largest)."""
-    silhouette: dict[int, float]
-    """Silhouette score for every k tried."""
+    clusters: pd.DataFrame  # machine_id, cluster_id (0 = largest), cluster_label
+    silhouette: dict[int, float]  # per k tried
     k: int
-    """Chosen number of clusters."""
-    centroids: pd.DataFrame
-    """Mean feature values per cluster (original units), indexed by ``cluster_id``."""
+    centroids: pd.DataFrame  # mean features per cluster_id
 
 
 def machine_features(df: pd.DataFrame, value_col: str = VALUE_COL) -> pd.DataFrame:
-    """One row per machine: ``wd_0`` … ``wd_6`` (normalized weekday profile), ``cv``, ``level``."""
+    """Per machine: ``wd_0`` … ``wd_6`` (normalized weekday shape), ``cv``, ``level``."""
     profile = weekday_profile(df, value_col, normalize=True)
     profile.columns = [f"wd_{d}" for d in profile.columns]
     level = df.groupby("machine_id")[value_col].mean().rename("level")
@@ -70,22 +54,13 @@ def machine_features(df: pd.DataFrame, value_col: str = VALUE_COL) -> pd.DataFra
 
 
 def weekend_share(features: pd.DataFrame) -> pd.Series:
-    """Mean of the normalized Saturday and Sunday profile (``1.0`` = an average day)."""
+    """Mean of the normalized Saturday and Sunday values (1.0 = an average day)."""
     return features[["wd_5", "wd_6"]].mean(axis=1).rename("weekend_share")
 
 
 def label_clusters(centroids: pd.DataFrame) -> dict[int, str]:
-    """Give each cluster one of the labels used by ``configs/scenario.yaml``.
-
-    Rules on the centroids (columns of :func:`machine_features`), applied in order:
-
-    1. the cluster with the lowest ``cv`` → ``steady``;
-    2. if there are 3+ clusters, the remaining cluster with the highest weekend share →
-       ``weekend_heavy``;
-    3. every other cluster → ``volatile``.
-
-    Labels are not unique when k > 3 (several ``volatile`` clusters); ``cluster_id`` is the key.
-    """
+    """Labels used by ``configs/scenario.yaml``: lowest cv → ``steady``; of the rest, highest
+    weekend share → ``weekend_heavy`` (k ≥ 3); others → ``volatile`` (may repeat)."""
     labels = dict.fromkeys(centroids.index, "volatile")
     steady = centroids["cv"].idxmin()
     labels[steady] = "steady"
@@ -95,26 +70,20 @@ def label_clusters(centroids: pd.DataFrame) -> dict[int, str]:
 
 
 def cluster_machines(df: pd.DataFrame, seed: int, value_col: str = VALUE_COL) -> ClusteringResult:
-    """Cluster machines by demand behaviour, choosing k in :data:`K_RANGE` by silhouette.
-
-    Args:
-        df: Long table with ``machine_id``, ``date`` and ``value_col``.
-        seed: Random seed for KMeans (same seed → same clusters).
-        value_col: Column holding daily demand.
-    """
+    """Standardize features, fit KMeans for each k in ``K_RANGE``, keep the best silhouette."""
     features = machine_features(df, value_col)
     z = StandardScaler().fit_transform(features)
 
     fits: dict[int, KMeans] = {}
     silhouette: dict[int, float] = {}
     for k in K_RANGE:
-        if k >= len(features):  # silhouette needs at least one more machine than clusters
+        if k >= len(features):  # silhouette needs more machines than clusters
             break
         fits[k] = KMeans(n_clusters=k, n_init=KMEANS_N_INIT, random_state=seed).fit(z)
         silhouette[k] = float(silhouette_score(z, fits[k].labels_))
     k = max(silhouette, key=silhouette.__getitem__)
 
-    # Renumber clusters by size (0 = largest) so ids are stable and easy to read.
+    # Renumber by size (0 = largest) so ids are stable across runs.
     raw = pd.Series(fits[k].labels_, index=features.index)
     order = {old: new for new, old in enumerate(raw.value_counts().index)}
     cluster_id = raw.map(order).rename("cluster_id")
@@ -129,7 +98,7 @@ def cluster_machines(df: pd.DataFrame, seed: int, value_col: str = VALUE_COL) ->
 
 
 def eda_summary(df: pd.DataFrame, result: ClusteringResult) -> str:
-    """Build the markdown text of ``reports/eda_summary.md``."""
+    """Markdown text of ``reports/eda_summary.md``."""
     years = sorted(df["date"].dt.year.unique())
     holiday_dates = holidays.country_holidays(
         NN5_HOLIDAY_COUNTRY[0], subdiv=NN5_HOLIDAY_COUNTRY[1], years=years
@@ -201,7 +170,7 @@ Chosen **k = {result.k}**. Labels: lowest cv → `steady`; of the rest, highest 
 
 
 def run(data_dir: str | Path | None = None, reports_dir: str | Path | None = None) -> None:
-    """Cluster the ``nn5_daily`` machines, write ``machine_clusters`` and the EDA summary."""
+    """Cluster ``nn5_daily``; write ``machine_clusters`` and ``reports/eda_summary.md``."""
     df = read_table("nn5_daily", data_dir)
     result = cluster_machines(df, seed=load_config("model").seed)
     write_table(result.clusters, "machine_clusters", data_dir)
@@ -213,7 +182,5 @@ def run(data_dir: str | Path | None = None, reports_dir: str | Path | None = Non
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging()
     run()

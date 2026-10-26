@@ -1,24 +1,10 @@
-"""Backtest the LightGBM quantile models, calibrate them and compare with the baselines.
+"""Backtest, calibrate and report the LightGBM quantile models.
 
-Schedule (per track and target), over the same test period as the baselines:
+Per track and target: retrain every ``quantile_retrain_every_days`` (plus one warm-up retrain
+before the test, used only to calibrate the first model) on labels already known, predict
+until the next retrain, add the calibration shifts and sort the quantiles.
 
-1. **Retrain dates** every ``quantile_retrain_every_days`` origins, plus one warm-up retrain one
-   period before the test starts (its forecasts are only used to calibrate the first test model).
-2. **Training rows** at retrain date ``r``: feature rows with ``origin_date <= r − horizon_max``
-   (labels fully observed), from the last ``quantile_train_days`` days, every
-   ``train_origin_step``-th origin.
-3. **Predict** every origin from ``r`` until the next retrain; sort quantiles per row.
-4. **Calibrate**: shifts estimated on the most recent out-of-sample window (see
-   :mod:`.calibration`) are added, then quantiles are sorted again.
-
-Outputs: ``forecasts_<track>`` (``model = quantile_lgbm``), ``calibration_<track>`` (the
-corrections), ``reports/forecast_comparison_<track>.md`` and an MLflow run in
-``forecast-quantile``.
-
-Run with::
-
-    python -m atm_cash_optimizer.forecasting.train                 # both tracks
-    python -m atm_cash_optimizer.forecasting.train --timing 1      # time 1 retrain, write nothing
+Run: ``python -m atm_cash_optimizer.forecasting.train [--track nn5|lk] [--timing N]``
 """
 
 from __future__ import annotations
@@ -31,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from atm_cash_optimizer import setup_logging
 from atm_cash_optimizer.config import BacktestConfig, ModelConfig, load_config
 from atm_cash_optimizer.forecasting import calibration, evaluation
 from atm_cash_optimizer.forecasting.backtest import (
@@ -60,13 +47,11 @@ KEYS = ["machine_id", "origin_date", "h", "target"]
 SHIFT_COLUMNS = ["target", "h", "quantile", "n", "coverage", "shift", "applied"]
 
 
-# --------------------------------------------------------------------------------------------
-# Data and schedule
-# --------------------------------------------------------------------------------------------
+# --- Data and schedule ---
 
 
 def load_features(track: str) -> pd.DataFrame:
-    """Read ``features_<track>`` (all targets) with dates as datetimes and floats as float32."""
+    """``features_<track>`` with datetimes and float32 features."""
     df = pd.read_parquet(get_data_dir() / "features" / f"features_{track}")
     df["origin_date"] = pd.to_datetime(df["origin_date"]).astype("datetime64[ns]")
     df["target"] = df["target"].astype(str)
@@ -76,7 +61,7 @@ def load_features(track: str) -> pd.DataFrame:
 
 
 def retrain_schedule(test_origins: pd.DatetimeIndex, every_days: int) -> list[pd.Timestamp]:
-    """Warm-up retrain one period before the test, then every ``every_days`` test origins."""
+    """A warm-up date one period before the test, then every ``every_days`` origins."""
     warm_up = test_origins[0] - pd.Timedelta(days=every_days)
     return [warm_up, *test_origins[::every_days]]
 
@@ -84,11 +69,7 @@ def retrain_schedule(test_origins: pd.DatetimeIndex, every_days: int) -> list[pd
 def training_rows(
     features: pd.DataFrame, retrain_date: pd.Timestamp, cfg: ModelConfig
 ) -> pd.DataFrame:
-    """Rows a model retrained on ``retrain_date`` may learn from (labels fully observed).
-
-    Raises:
-        AssertionError: If any label would end after ``retrain_date`` (future leakage).
-    """
+    """Rows whose label is fully known on ``retrain_date`` (asserted: no leakage)."""
     last_origin = retrain_date - pd.Timedelta(days=cfg.horizon_max)
     first_origin = last_origin - pd.Timedelta(days=cfg.quantile_train_days)
     origin = features["origin_date"]
@@ -104,16 +85,14 @@ def training_rows(
 def _calibration_window(
     out_of_sample: pd.DataFrame, retrain_date: pd.Timestamp, window_days: int
 ) -> pd.DataFrame:
-    # Out-of-sample forecasts whose actual is known on the retrain date, most recent window only.
+    # Recent out-of-sample forecasts whose actual is already known on the retrain date.
     label_end = out_of_sample["origin_date"] + pd.to_timedelta(out_of_sample["h"], unit="D")
     known = label_end <= retrain_date
     recent = label_end > retrain_date - pd.Timedelta(days=window_days)
     return out_of_sample[known & recent & out_of_sample["actual"].notna()]
 
 
-# --------------------------------------------------------------------------------------------
-# Backtest
-# --------------------------------------------------------------------------------------------
+# --- Backtest ---
 
 
 def backtest_target(
@@ -123,13 +102,7 @@ def backtest_target(
     cfg: ModelConfig,
     params: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Rolling retrain, predict and calibrate for one target.
-
-    Returns:
-        ``(raw, calibrated, shifts)``: raw and calibrated forecasts (``KEYS``, ``actual`` and
-        quantile columns) for every origin from the first retrain date to ``end``, and the
-        shifts estimated at each retrain date.
-    """
+    """``(raw, calibrated, shifts)`` for one target, from the first retrain to ``end``."""
     raw_parts, calibrated_parts, shift_parts = [], [], []
     for k, retrain_date in enumerate(schedule):
         next_date = schedule[k + 1] if k + 1 < len(schedule) else end + pd.Timedelta(days=1)
@@ -167,9 +140,7 @@ def backtest_target(
     return pd.concat(raw_parts), pd.concat(calibrated_parts), pd.concat(shift_parts)
 
 
-# --------------------------------------------------------------------------------------------
-# Report
-# --------------------------------------------------------------------------------------------
+# --- Report ---
 
 
 def comparison_report(
@@ -180,11 +151,7 @@ def comparison_report(
     coverage_calibrated: pd.DataFrame,
     shifts: pd.DataFrame,
 ) -> str:
-    """Markdown text of ``reports/forecast_comparison_<track>.md``.
-
-    All models are compared on their median (MAE, sMAPE) — the only forecast every model has.
-    The range of ``quantile_lgbm`` is judged on its own: pinball loss per quantile and coverage.
-    """
+    """Markdown report: every model on its median; the quantile model's range on its own."""
     overall = metrics[metrics["segment_type"] == "all"]
     sections = [
         f"# Forecast comparison — {track} track\n",
@@ -237,9 +204,7 @@ def comparison_report(
     return "\n".join(sections)
 
 
-# --------------------------------------------------------------------------------------------
-# Pipeline
-# --------------------------------------------------------------------------------------------
+# --- Pipeline ---
 
 
 def _coverage(
@@ -307,11 +272,7 @@ def _log_mlflow(
 def run_track(
     track: str, model_cfg: ModelConfig, backtest_cfg: BacktestConfig, timing: int | None = None
 ) -> None:
-    """Backtest, calibrate, evaluate and report one track.
-
-    With ``timing = N`` only the first N retrains run, a time estimate is logged and nothing is
-    written.
-    """
+    """Backtest and report one track; ``timing = N`` runs N retrains and writes nothing."""
     started = time.perf_counter()
     panel = load_series(track)
     origin_idx = origin_indices(len(panel.dates), backtest_cfg.test_days)
@@ -376,7 +337,6 @@ def run_track(
 
 
 def run(tracks: tuple[str, ...] = TRACKS, timing: int | None = None) -> None:
-    """Run :func:`run_track` for each track."""
     model_cfg = load_config("model")
     backtest_cfg = load_config("backtest")
     if not timing:
@@ -386,16 +346,13 @@ def run(tracks: tuple[str, ...] = TRACKS, timing: int | None = None) -> None:
 
 
 def main() -> None:
-    """Command-line entry point."""
     parser = argparse.ArgumentParser(description="Backtest the LightGBM quantile models.")
     parser.add_argument("--track", choices=[*TRACKS, "all"], default="all")
     parser.add_argument(
         "--timing", type=int, metavar="N", help="only run N retrains and print a time estimate"
     )
     args = parser.parse_args()
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging()
     run(TRACKS if args.track == "all" else (args.track,), args.timing)
 
 

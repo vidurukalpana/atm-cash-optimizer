@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 from atm_cash_optimizer.io import markdown_table
 from atm_cash_optimizer.simulation.metrics import network_totals
@@ -15,7 +16,7 @@ WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 
 
 def setting_label(policy: str, param: float) -> str:
-    """Readable name of one policy setting, e.g. ``threshold 30 %``."""
+    """Readable name, e.g. ``threshold 30%``."""
     if policy == "fixed_schedule":
         return f"fixed schedule ({WEEKDAYS[int(param)]})"
     if policy == "threshold":
@@ -33,7 +34,7 @@ def _labels(network: pd.DataFrame) -> list[str]:
 
 
 def savings(best: pd.DataFrame) -> dict[str, float | str]:
-    """Total-cost saving of the best optimizer setting against the best baseline setting."""
+    """Cost saving of the best optimizer setting vs the best simple rule."""
     optimizer = best[best["policy"] == OPTIMIZER].iloc[0]
     baselines = best[best["policy"] != OPTIMIZER]
     baseline = baselines.loc[baselines["total_cost"].idxmin()]
@@ -49,7 +50,7 @@ def savings(best: pd.DataFrame) -> dict[str, float | str]:
 
 
 def breakdown(summary: pd.DataFrame, best: pd.DataFrame, by: str) -> pd.DataFrame:
-    """Total cost and stockout rate of each policy's best setting, per ``by`` segment."""
+    """Cost and stockout rate of each policy's best setting per ``by`` segment."""
     keep = summary.merge(best[["policy", "param"]], on=["policy", "param"])
     keep = keep[keep[by].notna()]
     grouped = keep.groupby([by, "policy"]).agg(
@@ -62,8 +63,8 @@ def breakdown(summary: pd.DataFrame, best: pd.DataFrame, by: str) -> pd.DataFram
     return grouped.reset_index()
 
 
-def frontier_chart(network: pd.DataFrame, track: str, path: Path) -> None:
-    """Interactive chart: stockout rate vs total cost, one point per policy setting."""
+def frontier_figure(network: pd.DataFrame, track: str) -> go.Figure:
+    """Stockout rate vs total cost, one point per policy setting."""
     df = network.assign(setting=_labels(network))
     fig = px.scatter(
         df,
@@ -78,7 +79,12 @@ def frontier_chart(network: pd.DataFrame, track: str, path: Path) -> None:
         },
     )
     fig.update_traces(textposition="top center")
-    fig.write_html(path, include_plotlyjs="cdn")
+    return fig
+
+
+def frontier_chart(network: pd.DataFrame, track: str, path: Path) -> None:
+    """Save :func:`frontier_figure` as an HTML file."""
+    frontier_figure(network, track).write_html(path, include_plotlyjs="cdn")
 
 
 def results_report(

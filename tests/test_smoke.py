@@ -14,10 +14,6 @@ SUBPACKAGES = [
     "forecasting",
     "optimization",
     "simulation",
-    "operations",
-    "pipelines",
-    "api",
-    "monitoring",
 ]
 
 

@@ -1,15 +1,10 @@
 """Tests for the baseline forecasters, the backtest helpers and the evaluation metrics."""
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from atm_cash_optimizer.forecasting import evaluation
-from atm_cash_optimizer.forecasting.backtest import (
-    history_slice,
-    origin_indices,
-    training_data,
-)
+from atm_cash_optimizer.forecasting.backtest import history_slice, origin_indices
 from atm_cash_optimizer.forecasting.baselines import seasonal_naive, weekday_mean
 
 WEEK = np.array([10.0, 11, 12, 20, 18, 8, 9])
@@ -36,13 +31,7 @@ def test_weekday_mean_hand_computed() -> None:
     assert daily[0, 0, 7] == daily[0, 0, 0]  # o+8 is the same weekday as o+1
 
 
-def test_training_data_never_after_origin() -> None:
-    dates = pd.date_range("2024-01-01", periods=60, freq="D")
-    df = pd.DataFrame({"date": dates, "y": np.arange(60.0)})
-    cutoff = dates[40]
-
-    assert training_data(df, cutoff)["date"].max() == cutoff
-    assert len(training_data(df, cutoff, days=28)) == 28
+def test_history_never_after_origin() -> None:
     window = history_slice(40, days=28)
     assert (window.start, window.stop) == (13, 41)  # days 13 .. 40, never 41+
 

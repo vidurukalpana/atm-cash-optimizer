@@ -1,1 +1,1 @@
-"""Origin–horizon feature tables for forecasting, built with PySpark."""
+"""Origin–horizon feature tables for forecasting (PySpark)."""

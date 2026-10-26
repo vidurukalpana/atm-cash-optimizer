@@ -1,1 +1,1 @@
-"""Download, parse, impute, validate and store the NN5 withdrawals data."""
+"""Download, parse, impute and validate the NN5 data."""

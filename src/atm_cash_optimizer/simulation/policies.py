@@ -1,13 +1,7 @@
-"""Replenishment policies compared in the simulation, all under the same operating limits.
+"""Policies compared in the simulation, all under the same limits.
 
-Every policy implements ``decide(day, spec, state, info)``: at the end of ``day`` it may order
-visits for later days. ``info`` only exposes demand up to ``day`` and the forecast made on
-``day`` — never the future. Shared limits: orders need ``lead_days``, no visits on no-service
-days, loads in whole bundles and never above capacity.
-
-- :class:`FixedSchedulePolicy` — visit on one weekday (or the next service day), fill to the top.
-- :class:`ThresholdPolicy` — refill when cash falls below a share of capacity.
-- :class:`OptimizerPolicy` — the MILP planner fed with the quantile forecast.
+At the end of each day a policy may order visits; it sees only demand up to that day and that
+day's forecast. Limits: lead time, no visits on no-service days, whole bundles, capacity.
 """
 
 from __future__ import annotations
@@ -46,15 +40,13 @@ class Policy(Protocol):
     ) -> list[Order]: ...
 
 
-# --------------------------------------------------------------------------------------------
-# Shared helpers
-# --------------------------------------------------------------------------------------------
+# --- Shared helpers ---
 
 
 def next_service_day(
     day: pd.Timestamp, lead_days: int, no_service_dates: frozenset[pd.Timestamp]
 ) -> pd.Timestamp:
-    """First date at least ``lead_days`` after ``day`` on which vans run."""
+    """First date at least ``lead_days`` ahead on which vans run."""
     candidate = day + pd.Timedelta(days=max(lead_days, 1))
     while candidate in no_service_dates:
         candidate += pd.Timedelta(days=1)
@@ -62,7 +54,7 @@ def next_service_day(
 
 
 def round_down_to_bundles(amount: float, bundle: float) -> float:
-    """Largest whole number of bundles not above ``amount`` (never negative)."""
+    """Whole bundles not above ``amount`` (never negative)."""
     return max(0.0, math.floor(amount / bundle) * bundle)
 
 
@@ -74,7 +66,7 @@ def fill_order(
     settings: opt.PlanSettings,
     emergency: bool = False,
 ) -> Order:
-    """ATM: fill every denomination to capacity. CRM: load or remove to half the vault."""
+    """ATM: fill every denomination. CRM: load or remove to half the vault."""
     if spec.is_crm:
         target = CRM_TARGET_FRACTION * spec.capacity[opt.TOTAL]
         gap = target - state.cash[opt.TOTAL]
@@ -87,14 +79,12 @@ def fill_order(
     return Order(spec.machine_id, day, visit_date, load, 0.0, emergency)
 
 
-# --------------------------------------------------------------------------------------------
-# Policies
-# --------------------------------------------------------------------------------------------
+# --- Policies ---
 
 
 @dataclass(frozen=True)
 class FixedSchedulePolicy:
-    """Visit every week on ``weekday`` (0 = Monday), or on the next service day after it."""
+    """Visit weekly on ``weekday`` (0 = Monday), or the next service day after it."""
 
     weekday: int
     name: str = "fixed_schedule"
@@ -118,10 +108,9 @@ class FixedSchedulePolicy:
 
 @dataclass(frozen=True)
 class ThresholdPolicy:
-    """Order a visit when cash falls below ``threshold`` × capacity.
+    """Refill when cash falls below ``threshold`` × capacity (any denomination).
 
-    ATMs: any denomination below its threshold ⇒ fill all to capacity. CRMs: also remove down to
-    half the vault when cash rises above ``(1 − threshold)`` × capacity.
+    CRMs are also emptied to half when cash rises above ``(1 − threshold)`` × capacity.
     """
 
     threshold: float
@@ -146,7 +135,7 @@ class ThresholdPolicy:
 
 @dataclass(frozen=True)
 class OptimizerPolicy:
-    """Re-plan every day with the MILP and send only the first orderable visit."""
+    """Re-plan daily with the MILP and send only the first orderable visit."""
 
     alpha: float
     name: str = "optimizer"

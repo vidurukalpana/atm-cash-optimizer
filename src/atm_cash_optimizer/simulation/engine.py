@@ -1,16 +1,8 @@
 """Day-by-day replay of one machine under one policy.
 
-Each simulated day:
-
-1. execute the orders for today (loads clipped at capacity, removals at the cash present);
-2. customers withdraw: ``served = min(demand, cash)`` per denomination; unmet ⇒ ``stockout``;
-3. CRM deposits: ``accepted = min(deposits, vault space)``; rejected ⇒ ``vault_full``;
-4. record the end-of-day state;
-5. the policy decides, seeing only demand up to today and today's forecast;
-6. emergency rule (same for every policy): after a stockout with no visit ordered by the next
-   service day, an emergency visit tomorrow fills the machine (CRM: to half the vault).
-
-``spec.dates[0]`` is the origin before the first day: the policy decides there first.
+Each day: 1. execute today's orders; 2. serve withdrawals (unmet ⇒ stockout); 3. accept CRM
+deposits (rejected ⇒ vault full); 4. record; 5. the policy decides; 6. after a stockout with no
+visit ordered by the next service day, an emergency visit tomorrow fills the machine.
 """
 
 from __future__ import annotations
@@ -32,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def _execute(orders: list[Order], spec: MachineSpec, state: MachineState) -> tuple[float, float]:
-    """Apply today's orders; returns ``(loaded, removed)`` in LKR."""
+    """Apply today's orders (loads clipped at capacity); returns ``(loaded, removed)``."""
     loaded = removed = 0.0
     for order in orders:
         for d, amount in order.load.items():
@@ -44,7 +36,7 @@ def _execute(orders: list[Order], spec: MachineSpec, state: MachineState) -> tup
             loaded += added
         if order.remove > 0:
             taken = min(order.remove, state.total)
-            # CRMs (the only machines with removals) hold one "total" denomination.
+            # Only CRMs remove cash, and they hold a single "total" denomination.
             (denom,) = state.cash
             state.cash[denom] -= taken
             removed += taken
@@ -54,12 +46,7 @@ def _execute(orders: list[Order], spec: MachineSpec, state: MachineState) -> tup
 def simulate_machine(
     spec: MachineSpec, policy: Policy, settings: PlanSettings, fill_fraction: float
 ) -> tuple[pd.DataFrame, list[Order]]:
-    """Replay ``spec`` under ``policy``.
-
-    Returns:
-        ``(daily, orders)``: one row per simulated day (``sim_daily`` columns) and every order
-        the policy or the emergency rule created.
-    """
+    """``(daily rows, orders)``; the policy decides first on ``spec.dates[0]``."""
     state = MachineState(cash=spec.initial_cash(fill_fraction))
     all_orders: list[Order] = []
     rows = []
@@ -122,7 +109,7 @@ def simulate_machine(
             }
         )
 
-        # 5. policy decision (forecasts exist up to the day before the last)
+        # 5. policy decision
         decide(day)
 
         # 6. emergency rule

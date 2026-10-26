@@ -1,9 +1,4 @@
-"""Download the NN5 Daily dataset (with missing values) from Zenodo.
-
-Source: Monash Time Series Forecasting Archive, Zenodo record 4656110
-(https://zenodo.org/records/4656110). The zip is checked against a known MD5 and unzipped into
-``data/raw/``. Nothing is downloaded if the ``.tsf`` file is already there.
-"""
+"""Download NN5 Daily (with missing values) from Zenodo record 4656110 into ``data/raw/``."""
 
 from __future__ import annotations
 
@@ -26,7 +21,6 @@ NN5_TSF = "nn5_daily_dataset_with_missing_values.tsf"
 
 
 def md5sum(path: Path) -> str:
-    """Return the hex MD5 digest of a file."""
     digest = hashlib.md5()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -35,11 +29,7 @@ def md5sum(path: Path) -> str:
 
 
 def download_nn5(data_dir: str | Path | None = None) -> Path:
-    """Make sure the NN5 ``.tsf`` file exists in ``data/raw/`` and return its path.
-
-    Raises:
-        ValueError: If the downloaded zip does not match :data:`NN5_MD5`.
-    """
+    """Return the path of the NN5 ``.tsf`` file, downloading it (MD5-checked) if missing."""
     raw_dir = get_data_dir(data_dir) / "raw"
     tsf_path = raw_dir / NN5_TSF
     if tsf_path.is_file():

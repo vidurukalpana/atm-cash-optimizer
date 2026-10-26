@@ -17,5 +17,4 @@ crm:
 
 bundle_notes: 100                # notes per bundle (loading unit)
 order_lead_days: 1               # orders placed at least this many days before the visit
-planning_horizon_days: 14
 initial_fill_fraction: 1.0       # share of capacity loaded at the start of a simulation

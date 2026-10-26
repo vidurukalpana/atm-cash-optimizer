@@ -1,12 +1,6 @@
-"""Build the simulated Sri Lankan network: ``lk_calendar`` and ``lk_daily``.
+"""Build the simulated Sri Lankan network: ``lk_calendar`` and ``lk_daily`` (all simulated).
 
-Run with::
-
-    python -m atm_cash_optimizer.scenario.build
-    python -m atm_cash_optimizer.scenario.build --n-machines 2000 --years 2   # larger network
-
-Needs ``nn5_daily`` (data ingestion) and ``machine_clusters`` (EDA). Every row of ``lk_daily``
-has ``is_simulated = True``.
+Run: ``python -m atm_cash_optimizer.scenario.build [--n-machines N --years Y]``
 """
 
 from __future__ import annotations
@@ -18,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from atm_cash_optimizer import setup_logging
 from atm_cash_optimizer.config import ScenarioConfig, load_config
 from atm_cash_optimizer.io import read_table, write_table
 from atm_cash_optimizer.scenario.calendar import build_lk_calendar
@@ -46,17 +41,7 @@ def build_scenario(
     n_days: int | None = None,
     holiday_csv: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return ``(lk_calendar, lk_daily)``.
-
-    Args:
-        nn5: The ``nn5_daily`` table.
-        clusters: The ``machine_clusters`` table.
-        cfg: Scenario settings.
-        denominations: Banknotes of the ``lk`` track (``machines.yaml``).
-        n_machines: If given (or ``n_days``), build a larger network by week-block bootstrap.
-        n_days: Length of the bootstrapped series (default: same as NN5).
-        holiday_csv: Fallback holiday file for years the ``holidays`` library lacks.
-    """
+    """Return ``(lk_calendar, lk_daily)``; ``n_machines``/``n_days`` bootstrap a larger network."""
     rng = np.random.default_rng(cfg.seed)
 
     df = nn5[["machine_id", "date", "withdrawals_lkr", "is_imputed"]]
@@ -140,14 +125,11 @@ def run(n_machines: int | None = None, years: float | None = None) -> None:
 
 
 def main() -> None:
-    """Command-line entry point."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n-machines", type=int, help="larger network: number of machines")
     parser.add_argument("--years", type=float, help="larger network: length in years")
     args = parser.parse_args()
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging()
     run(args.n_machines, args.years)
 
 

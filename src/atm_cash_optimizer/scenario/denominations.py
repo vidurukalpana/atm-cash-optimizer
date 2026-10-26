@@ -1,4 +1,4 @@
-"""Split total withdrawals into banknote denominations (``withdrawals_<denom>_lkr``)."""
+"""Split withdrawals into banknote denominations (``withdrawals_<denom>_lkr``)."""
 
 from __future__ import annotations
 
@@ -10,14 +10,7 @@ from atm_cash_optimizer.config import ScenarioConfig
 def split_denominations(
     df: pd.DataFrame, cfg: ScenarioConfig, denominations: list[str]
 ) -> pd.DataFrame:
-    """Add ``withdrawals_<denom>_lkr`` for each denomination, by location-type shares.
-
-    Shares come from ``denomination_shares[<location_type>]``, else ``["default"]``. The
-    columns add up to ``withdrawals_lkr``.
-
-    Raises:
-        ValueError: If a share table does not have exactly the track's denominations.
-    """
+    """Add one column per denomination using the location's shares (else ``default``)."""
     for location, shares in cfg.denomination_shares.items():
         if set(shares) != set(denominations):
             raise ValueError(

@@ -1,13 +1,8 @@
 """Plan every machine of a track for one origin date (rolling horizon).
 
-:func:`load_planning_data` reads the inputs once (quantile forecasts, machines, no-service days);
-:func:`plan_all` then solves one MILP per machine in parallel (``model.yaml → n_jobs`` cores).
-Only the decision for the first orderable day is meant to be sent (:meth:`Plan.committed`); the
-rest of each plan is re-done tomorrow with fresh data.
+Only each plan's first orderable visit is meant to be sent; the rest is re-planned tomorrow.
 
-Run one day with::
-
-    python -m atm_cash_optimizer.optimization.planner --track lk --date 2026-03-02 --alpha 0.95
+Run: ``python -m atm_cash_optimizer.optimization.planner --track lk --date 2025-08-10``
 """
 
 from __future__ import annotations
@@ -21,6 +16,7 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 
+from atm_cash_optimizer import setup_logging
 from atm_cash_optimizer.config import load_config
 from atm_cash_optimizer.forecasting.evaluation import quantile_column
 from atm_cash_optimizer.io import read_table
@@ -43,16 +39,14 @@ class PlanningData:
     """Inputs of :func:`plan_all`, loaded once per track."""
 
     track: str
-    machines: pd.DataFrame
-    """``machine_id``, ``machine_type``, ``location_type``; one row per machine."""
-    forecasts: dict[pd.Timestamp, pd.DataFrame]
-    """Quantile forecasts per origin date."""
+    machines: pd.DataFrame  # machine_id, machine_type, location_type
+    forecasts: dict[pd.Timestamp, pd.DataFrame]  # quantile forecasts per origin date
     quantiles: list[float]
     no_service_dates: frozenset[pd.Timestamp]
 
 
 def load_planning_data(track: str) -> PlanningData:
-    """Read forecasts, machines and no-service days of a track."""
+    """Quantile forecasts, machines and no-service days of a track."""
     model_cfg = load_config("model")
     forecasts = read_table(f"forecasts_{track}")
     forecasts = forecasts[forecasts["model"] == FORECAST_MODEL]
@@ -83,7 +77,7 @@ def load_planning_data(track: str) -> PlanningData:
 def capacity_and_shares(
     track: str, machine_type: str, location_type: str | None
 ) -> tuple[dict[str, float], dict[str, float]]:
-    """Capacity per denomination and the share of demand each denomination takes."""
+    """Capacity per denomination and each denomination's share of demand."""
     machines = load_config("machines")
     if track == "nn5":
         return {TOTAL: machines.atm.total_capacity_lkr}, {TOTAL: 1.0}
@@ -100,7 +94,7 @@ def capacity_and_shares(
 
 
 def initial_states(data: PlanningData) -> dict[str, MachineState]:
-    """Every machine filled to ``initial_fill_fraction`` of its capacity (standalone runs)."""
+    """Machines filled to ``initial_fill_fraction`` (for standalone runs)."""
     fill = load_config("machines").initial_fill_fraction
     states = {}
     for row in data.machines.itertuples():
@@ -118,7 +112,7 @@ def initial_states(data: PlanningData) -> dict[str, MachineState]:
 def forecast_window(
     data: PlanningData, origin_date: pd.Timestamp, machine_id: str, machine_type: str
 ) -> ForecastWindow:
-    """Cumulative quantiles for ``h = 1..H``: withdrawals for ATMs, net outflow for CRMs."""
+    """Withdrawal quantiles for ATMs, net-outflow quantiles for CRMs."""
     target = "net" if machine_type == "CRM" else "withdrawals"
     rows = data.forecasts[origin_date]
     rows = rows[(rows["machine_id"] == machine_id) & (rows["target"] == target)].sort_values("h")
@@ -131,7 +125,7 @@ def forecast_window(
 
 
 def plan_settings(alpha: float) -> PlanSettings:
-    """Solver settings from the configs: costs, lead time and bundle sizes."""
+    """Solver settings from the configs."""
     machines_cfg = load_config("machines")
     return PlanSettings(
         alpha=alpha,
@@ -148,7 +142,7 @@ def solve_machine(
     settings: PlanSettings,
     no_service_days: set[int],
 ) -> Plan:
-    """Solve one machine with the ATM model, or the CRM model (vault = its total capacity)."""
+    """Solve with the ATM or the CRM model."""
     if state.machine_type == "CRM":
         return solve_crm(state, window, settings, no_service_days, state.capacity[TOTAL])
     return solve_atm(state, window, settings, no_service_days)
@@ -161,15 +155,9 @@ def plan_all(
     states: dict[str, MachineState] | None = None,
     data: PlanningData | None = None,
 ) -> list[Plan]:
-    """Solve every machine of ``track`` for ``origin_date`` at safety level ``alpha``.
+    """Solve every machine for ``origin_date`` at safety level ``alpha`` (a forecast quantile).
 
-    Args:
-        origin_date: The evening the plan is made; forecasts must exist for it.
-        track: ``nn5`` or ``lk``.
-        alpha: Safety level; must be one of the forecast quantiles (e.g. 0.95).
-        states: Cash in each machine at the end of ``origin_date``; default: every machine
-            filled to ``initial_fill_fraction`` (for standalone runs).
-        data: Pre-loaded inputs (pass them when planning many days, e.g. in a simulation).
+    ``states`` defaults to :func:`initial_states`; pass pre-loaded ``data`` when planning many days.
     """
     origin_date = pd.Timestamp(origin_date)
     data = data or load_planning_data(track)
@@ -192,7 +180,7 @@ def plan_all(
 
 
 def plans_frame(plans: list[Plan], lead_days: int) -> pd.DataFrame:
-    """One row per planned visit, with ``committed = True`` for the decision sent today."""
+    """One row per planned visit; ``committed`` marks the decision sent today."""
     rows = []
     for plan in plans:
         committed = plan.committed(lead_days)
@@ -217,13 +205,13 @@ def plans_frame(plans: list[Plan], lead_days: int) -> pd.DataFrame:
 
 
 def main() -> None:
-    """Plan one day and print a summary (writes nothing)."""
+    """Plan one day and log a summary (writes nothing)."""
     parser = argparse.ArgumentParser(description="Plan all machines for one origin date.")
     parser.add_argument("--track", choices=["nn5", "lk"], default="lk")
     parser.add_argument("--date", help="origin date (default: first date with forecasts)")
     parser.add_argument("--alpha", type=float, default=0.95)
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    setup_logging()
 
     data = load_planning_data(args.track)
     origin = pd.Timestamp(args.date) if args.date else min(data.forecasts)
