@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from atm_cash_optimizer.config import DEFAULT_CONFIG_DIR, load_config
 
 
-@pytest.mark.parametrize("name", ["costs", "machines", "model", "backtest"])
+@pytest.mark.parametrize("name", ["costs", "machines", "model", "backtest", "scenario"])
 def test_config_loads(name: str) -> None:
     load_config(name)  # type: ignore[call-overload]
 

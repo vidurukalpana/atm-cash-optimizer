@@ -1,0 +1,90 @@
+# Sri Lanka scenario (lk track): a simulated network built on top of NN5.
+# Every value here is an ASSUMPTION — see docs/scenario.md. Nothing is real Sri Lankan data.
+start_date: "2024-03-18"         # ASSUMPTION — must be a Monday (same weekday as NN5's 1996-03-18)
+seed: 42
+crm_fraction: 0.35               # ASSUMPTION — share of machines that are Cash Recycler Machines
+
+# Probability of each location type, per EDA cluster label (machine_clusters table).
+location_types:                  # ASSUMPTION
+  steady:        {residential: 0.5, branch: 0.3, hospital: 0.2}
+  weekend_heavy: {supermarket: 0.6, tourist_area: 0.4}
+  volatile:      {bus_stand: 0.7, supermarket: 0.3}
+
+# level = demand multiplier; noise_sigma = extra day-to-day lognormal noise (mean 1).
+location_modifiers:              # ASSUMPTION
+  residential:  {level: 0.8, noise_sigma: 0.05}
+  branch:       {level: 1.0, noise_sigma: 0.08}
+  hospital:     {level: 0.9, noise_sigma: 0.08}
+  supermarket:  {level: 1.3, noise_sigma: 0.10}
+  tourist_area: {level: 1.1, noise_sigma: 0.15, peak_months: [12, 1, 2, 3], peak_multiplier: 1.4}
+  bus_stand:    {level: 1.5, noise_sigma: 0.20}
+
+# Recurring calendar effects (multiplied together with the festival effect below).
+calendar_multipliers:            # ASSUMPTION
+  salary_week: 1.2               # day of month >= salary_week_from_day
+  long_weekend_eve: 1.3          # working day before 3+ non-working days in a row
+  poya_day: 1.1
+salary_week_from_day: 25
+long_weekend_min_days: 3
+
+# Festival seasons, anchored on a holiday name from holidays.country_holidays("LK").
+# Each window covers days [from, to] relative to the holiday (negative = before).
+# Where festivals overlap, the strongest effect applies (multiplier furthest from 1), not the product.
+# Avurudu is the biggest cash season in Sri Lanka; Christmas is much smaller.
+events:                          # ASSUMPTION
+  avurudu:
+    anchor: "Sinhala and Tamil New Year"
+    windows:
+      - {from: -10, to: -4, multiplier: 1.5}  # bonuses paid, new clothes and gifts
+      - {from: -3, to: -1, multiplier: 2.0}   # last-minute shopping, new notes for "ganu denu"
+      - {from: 1, to: 4, multiplier: 0.7}     # people in home villages, shops closed
+  vesak:
+    anchor: "Vesak Full Moon Poya Day"
+    windows:
+      - {from: -4, to: -1, multiplier: 1.3}   # lanterns, dansal, pandals
+  poson:
+    anchor: "Poson Full Moon Poya Day"
+    windows:
+      - {from: -3, to: -1, multiplier: 1.15}  # dansal, pilgrimages to Anuradhapura/Mihintale
+  eid_al_fitr:
+    anchor: "Eid al-Fitr"
+    windows:
+      - {from: -4, to: -1, multiplier: 1.25}  # end of Ramazan: clothes, food, gifts
+  eid_al_adha:
+    anchor: "Eid al-Adha"
+    windows:
+      - {from: -3, to: -1, multiplier: 1.15}
+  diwali:
+    anchor: "Diwali"
+    windows:
+      - {from: -4, to: -1, multiplier: 1.2}
+  thai_pongal:
+    anchor: "Tamil Thai Pongal Day"
+    windows:
+      - {from: -3, to: -1, multiplier: 1.1}
+  christmas:
+    anchor: "Christmas Day"
+    windows:
+      - {from: -5, to: -1, multiplier: 1.25}  # smaller than Avurudu
+
+denomination_shares:             # ASSUMPTION — per location type, must sum to 1
+  default: {"5000": 0.55, "1000": 0.35, "500": 0.10}
+
+crm_deposits:                    # ASSUMPTION
+  ratio_range: [0.6, 1.1]        # deposits mean / withdrawals mean, drawn per CRM
+  weekday_profile: [1.3, 1.1, 1.0, 1.0, 1.1, 0.8, 0.5]   # Mon..Sun, rescaled to mean 1
+  holiday_multiplier: 0.4        # on public holidays (businesses closed)
+  noise_sigma: 0.15
+
+no_service: {poya: true, public_holidays: true}   # no cash-in-transit visits on these days
+
+# Remove UK effects from NN5 before adding Sri Lankan ones: values on these original dates are
+# replaced by the same-weekday median of the surrounding weeks.
+uk_neutralize:
+  days_around_holiday: 1         # England bank holidays ± this many days
+  extra_windows: [["12-15", "01-03"]]   # the whole UK Christmas–New Year period (see docs/eda.md)
+  window_weeks: 3
+
+# Only used with --n-machines / --years (larger network for Spark scale tests).
+bootstrap:
+  level_sigma: 0.15              # per-machine lognormal level perturbation

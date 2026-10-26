@@ -42,3 +42,12 @@ python -m atm_cash_optimizer.analysis.clustering
 ```
 
 Charts and SQL queries (`sql/eda_queries.sql`): `notebooks/01_eda.ipynb`. Findings and decisions: [docs/eda.md](docs/eda.md).
+
+## Sri Lanka scenario (simulated)
+
+```bash
+# lk_calendar + lk_daily: NN5 moved to 2024–2026 with Sri Lankan holidays, festivals, CRMs, banknotes
+python -m atm_cash_optimizer.scenario.build
+```
+
+All `lk` data is **simulated** — see [docs/scenario.md](docs/scenario.md).

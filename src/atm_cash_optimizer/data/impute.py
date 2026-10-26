@@ -19,7 +19,11 @@ WINDOW_WEEKS = 4
 """Weeks searched on each side of a missing day (method fixed by the development plan)."""
 
 
-def _impute_series(s: pd.Series, window_weeks: int) -> pd.Series:
+def fill_weekday_median(s: pd.Series, window_weeks: int = WINDOW_WEEKS) -> pd.Series:
+    """Fill NaNs in one machine's daily series (consecutive days, ``DatetimeIndex``).
+
+    Uses the same-weekday median within ±``window_weeks``, then the series' weekday median.
+    """
     # Rows are consecutive days, so shifting by 7 * k rows moves k weeks.
     neighbours = pd.concat(
         [s.shift(sign * 7 * k) for k in range(1, window_weeks + 1) for sign in (1, -1)],
@@ -46,7 +50,7 @@ def impute_weekday_median(df: pd.DataFrame, window_weeks: int = WINDOW_WEEKS) ->
     out["is_imputed"] = out["withdrawals_raw"].isna()
 
     filled = [
-        _impute_series(group.set_index("date")["withdrawals_raw"], window_weeks)
+        fill_weekday_median(group.set_index("date")["withdrawals_raw"], window_weeks)
         for _, group in out.groupby("machine_id", sort=False)
     ]
     out["withdrawals_raw"] = pd.concat(filled).to_numpy()
