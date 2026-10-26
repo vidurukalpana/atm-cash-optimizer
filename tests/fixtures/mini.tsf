@@ -1,0 +1,10 @@
+# Two-series excerpt in NN5 format for tests.
+@relation mini
+@attribute series_name string
+@attribute start_timestamp date
+@frequency daily
+@missing true
+@equallength true
+@data
+T1:1996-03-18 00-00-00:1,2,3,4,5,6,7,?,9,10,11,12,13,14,15,16,17,18,19,20,21
+T2:1996-03-18 00-00-00:?,10,10,10,10,10,10,?,10,10,10,10,10,10,30,10,10,10,10,10,10

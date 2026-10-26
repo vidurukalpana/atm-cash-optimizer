@@ -24,3 +24,12 @@ ruff format --check .
 # fast test suite
 pytest -m "not slow"
 ```
+
+## Data
+
+```bash
+# download NN5, impute, scale to LKR, validate → data/processed/nn5_daily.parquet + data/warehouse.duckdb
+python -m atm_cash_optimizer.data.ingest
+```
+
+See [docs/data.md](docs/data.md) for the source, fields and imputation method.
