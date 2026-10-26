@@ -1,1 +1,1 @@
-"""scenario subpackage (implemented in a later branch)."""
+"""Simulated Sri Lankan network (lk track) built on top of NN5."""

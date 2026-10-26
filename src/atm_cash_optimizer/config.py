@@ -12,7 +12,10 @@ The config directory defaults to ``<repo>/configs`` and can be overridden with t
 from __future__ import annotations
 
 import logging
+import math
 import os
+import re
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal, overload
 
@@ -218,16 +221,148 @@ class BacktestConfig(_Config):
 
 
 # --------------------------------------------------------------------------------------------
+# scenario.yaml
+# --------------------------------------------------------------------------------------------
+
+NonNegativeFloat = Annotated[float, Field(ge=0)]
+_MONTH_DAY = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")
+
+
+def _check_sums_to_one(shares: dict[str, float], what: str) -> None:
+    if not math.isclose(sum(shares.values()), 1.0, abs_tol=1e-9):
+        raise ValueError(f"{what} must sum to 1, got {sum(shares.values())}")
+
+
+class LocationModifier(_Config):
+    """How a location type changes demand: level, extra noise and optional peak months."""
+
+    level: PositiveFloat
+    noise_sigma: NonNegativeFloat
+    peak_months: list[Annotated[int, Field(ge=1, le=12)]] = []
+    peak_multiplier: PositiveFloat = 1.0
+
+
+class CalendarMultipliers(_Config):
+    """Demand multipliers for recurring calendar effects."""
+
+    salary_week: PositiveFloat
+    long_weekend_eve: PositiveFloat
+    poya_day: PositiveFloat
+
+
+class EventWindow(_Config):
+    """Days ``[from, to]`` relative to a festival's anchor holiday, with a demand multiplier."""
+
+    start: int = Field(alias="from")
+    end: int = Field(alias="to")
+    multiplier: PositiveFloat
+
+    @model_validator(mode="after")
+    def _ordered(self) -> EventWindow:
+        if self.start > self.end:
+            raise ValueError("event window 'from' must not be after 'to'")
+        return self
+
+
+class EventConfig(_Config):
+    """A festival season anchored on a Sri Lankan holiday name."""
+
+    anchor: str = Field(min_length=1)
+    windows: list[EventWindow] = Field(min_length=1)
+
+
+class CrmDepositsConfig(_Config):
+    """How simulated CRM deposits are generated."""
+
+    ratio_range: tuple[PositiveFloat, PositiveFloat]
+    weekday_profile: list[PositiveFloat] = Field(min_length=7, max_length=7)
+    holiday_multiplier: NonNegativeFloat
+    noise_sigma: NonNegativeFloat
+
+    @field_validator("ratio_range")
+    @classmethod
+    def _ordered(cls, v: tuple[float, float]) -> tuple[float, float]:
+        if v[0] > v[1]:
+            raise ValueError("ratio_range must be [low, high]")
+        return v
+
+
+class NoServiceConfig(_Config):
+    """Day types on which no cash-in-transit visit is possible."""
+
+    poya: bool
+    public_holidays: bool
+
+
+class UkNeutralizeConfig(_Config):
+    """Which original NN5 dates are replaced to remove UK holiday effects."""
+
+    days_around_holiday: NonNegativeInt
+    extra_windows: list[tuple[str, str]]
+    window_weeks: PositiveInt
+
+    @field_validator("extra_windows")
+    @classmethod
+    def _month_days(cls, v: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        for window in v:
+            for month_day in window:
+                if not _MONTH_DAY.match(month_day):
+                    raise ValueError(f"{month_day!r} is not a MM-DD date")
+        return v
+
+
+class BootstrapConfig(_Config):
+    """Settings for the optional larger network (``--n-machines`` / ``--years``)."""
+
+    level_sigma: NonNegativeFloat
+
+
+class ScenarioConfig(_Config):
+    """Simulated Sri Lankan network (``lk`` track) built on top of NN5."""
+
+    start_date: date
+    seed: NonNegativeInt
+    crm_fraction: UnitInterval
+    location_types: dict[str, dict[str, UnitInterval]] = Field(min_length=1)
+    location_modifiers: dict[str, LocationModifier] = Field(min_length=1)
+    calendar_multipliers: CalendarMultipliers
+    salary_week_from_day: Annotated[int, Field(ge=1, le=31)]
+    long_weekend_min_days: PositiveInt
+    events: dict[str, EventConfig]
+    denomination_shares: dict[str, dict[str, UnitInterval]]
+    crm_deposits: CrmDepositsConfig
+    no_service: NoServiceConfig
+    uk_neutralize: UkNeutralizeConfig
+    bootstrap: BootstrapConfig
+
+    @model_validator(mode="after")
+    def _consistent(self) -> ScenarioConfig:
+        for label, probabilities in self.location_types.items():
+            _check_sums_to_one(probabilities, f"location_types.{label}")
+            unknown = set(probabilities) - set(self.location_modifiers)
+            if unknown:
+                raise ValueError(f"location_types.{label}: no location_modifiers for {unknown}")
+        if "default" not in self.denomination_shares:
+            raise ValueError("denomination_shares needs a 'default' entry")
+        for location, shares in self.denomination_shares.items():
+            _check_sums_to_one(shares, f"denomination_shares.{location}")
+            if location != "default" and location not in self.location_modifiers:
+                raise ValueError(f"denomination_shares: unknown location type {location!r}")
+        return self
+
+
+# --------------------------------------------------------------------------------------------
 # Loading
 # --------------------------------------------------------------------------------------------
 
-ConfigName = Literal["costs", "machines", "model", "backtest"]
+ConfigName = Literal["costs", "machines", "model", "backtest", "scenario"]
 
 CONFIG_MODELS: dict[str, type[_Config]] = {
     "costs": CostsConfig,
     "machines": MachinesConfig,
     "model": ModelConfig,
     "backtest": BacktestConfig,
+    "scenario": ScenarioConfig,
 }
 
 
@@ -251,13 +386,17 @@ def load_config(name: Literal["model"], config_dir: str | Path | None = None) ->
 def load_config(
     name: Literal["backtest"], config_dir: str | Path | None = None
 ) -> BacktestConfig: ...
+@overload
+def load_config(
+    name: Literal["scenario"], config_dir: str | Path | None = None
+) -> ScenarioConfig: ...
 
 
 def load_config(name: ConfigName, config_dir: str | Path | None = None) -> _Config:
     """Load and validate ``configs/<name>.yaml``.
 
     Args:
-        name: One of ``"costs"``, ``"machines"``, ``"model"``, ``"backtest"``.
+        name: One of ``"costs"``, ``"machines"``, ``"model"``, ``"backtest"``, ``"scenario"``.
         config_dir: Directory holding the YAML files (see :func:`get_config_dir`).
 
     Returns:
