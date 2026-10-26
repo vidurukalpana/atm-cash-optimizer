@@ -61,6 +61,16 @@ python -m atm_cash_optimizer.features.build          # --track nn5 | lk | all
 
 Columns and rules are documented in `src/atm_cash_optimizer/features/build.py`.
 
+## Baseline forecasts
+
+```bash
+# backtest baselines A/B/C on the last 280 days → forecasts_nn5, forecasts_lk + MLflow (~3 min, 4 cores)
+python -m atm_cash_optimizer.forecasting.baselines      # --track nn5|lk|all --models A B C
+
+# browse the results
+mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
+```
+
 
 if i wnat to continue this converstaion? how to do that?
 

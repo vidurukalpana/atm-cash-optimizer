@@ -13,4 +13,6 @@ lightgbm:
   min_child_samples: 50
   subsample: 0.8
   colsample_bytree: 0.8
+n_jobs: 4                        # CPU cores for parallel work (of 10) — keeps the Mac cool
+ets_train_days: 364              # baseline C (AutoETS) fits on the last year only
 seed: 42

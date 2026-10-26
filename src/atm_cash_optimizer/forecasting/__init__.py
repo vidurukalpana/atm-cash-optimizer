@@ -1,1 +1,1 @@
-"""forecasting subpackage (implemented in a later branch)."""
+"""Rolling-origin backtest, baseline forecasters and forecast evaluation."""
