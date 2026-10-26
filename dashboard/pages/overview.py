@@ -1,4 +1,4 @@
-"""Overview: the network at a glance and how the planning works."""
+"""Overview: all machines at a glance and how the planning works."""
 
 import streamlit as st
 

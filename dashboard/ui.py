@@ -88,7 +88,7 @@ def track_selector() -> str:
         st.error("No results found. Run the pipeline first (see README).")
         st.stop()
     st.session_state.setdefault("track", tracks[0])
-    st.sidebar.selectbox("Network", tracks, format_func=TRACKS.get, key="track")
+    st.sidebar.selectbox("Data set", tracks, format_func=TRACKS.get, key="track")
     return st.session_state["track"]
 
 

@@ -6,8 +6,9 @@ import pandas as pd
 import streamlit as st
 
 from atm_cash_optimizer.io import query
+from atm_cash_optimizer.optimization.planner import capacity_and_shares
 
-TRACKS = {"lk": "Sri Lanka network", "nn5": "UK ATMs (NN5)"}
+TRACKS = {"lk": "Sri Lanka (simulated)", "nn5": "UK ATMs (real data)"}
 
 
 def _check(track: str) -> None:
@@ -61,3 +62,27 @@ def sim_summary(track: str) -> pd.DataFrame:
     """Per policy setting and machine: the simulation metrics plus machine type and location."""
     _check(track)
     return query(f"select * from sim_summary_{track}")
+
+
+@st.cache_data(show_spinner=False)
+def sim_daily(track: str) -> pd.DataFrame:
+    """Day-by-day simulation state of every machine under every policy setting."""
+    _check(track)
+    return query(f"select * from sim_daily_{track}")
+
+
+@st.cache_data(show_spinner=False)
+def orders(track: str) -> pd.DataFrame:
+    """Van visits ordered in the simulation."""
+    _check(track)
+    return query(f"select * from orders_{track}")
+
+
+@st.cache_data(show_spinner=False)
+def capacities(track: str) -> dict[str, dict[str, float]]:
+    """Capacity per denomination of every simulated machine."""
+    machines = sim_summary(track)[["machine_id", "machine_type", "location_type"]]
+    return {
+        row.machine_id: capacity_and_shares(track, row.machine_type, row.location_type)[0]
+        for row in machines.drop_duplicates("machine_id").itertuples()
+    }
