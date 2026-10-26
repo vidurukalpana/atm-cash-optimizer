@@ -33,3 +33,12 @@ python -m atm_cash_optimizer.data.ingest
 ```
 
 See [docs/data.md](docs/data.md) for the source, fields and imputation method.
+
+## Exploratory analysis
+
+```bash
+# cluster machines → machine_clusters table + reports/eda_summary.md
+python -m atm_cash_optimizer.analysis.clustering
+```
+
+Charts and SQL queries (`sql/eda_queries.sql`): `notebooks/01_eda.ipynb`. Findings and decisions: [docs/eda.md](docs/eda.md).
