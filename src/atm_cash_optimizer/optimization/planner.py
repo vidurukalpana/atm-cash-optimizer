@@ -130,15 +130,27 @@ def forecast_window(
     )
 
 
-def _solve_one(
+def plan_settings(alpha: float) -> PlanSettings:
+    """Solver settings from the configs: costs, lead time and bundle sizes."""
+    machines_cfg = load_config("machines")
+    return PlanSettings(
+        alpha=alpha,
+        costs=load_config("costs"),
+        lead_days=machines_cfg.order_lead_days,
+        bundle_notes=machines_cfg.bundle_notes,
+        largest_note=max(int(d) for d in machines_cfg.atm.cassettes),
+    )
+
+
+def solve_machine(
     state: MachineState,
     window: ForecastWindow,
     settings: PlanSettings,
     no_service_days: set[int],
-    vault_capacity: float,
 ) -> Plan:
+    """Solve one machine with the ATM model, or the CRM model (vault = its total capacity)."""
     if state.machine_type == "CRM":
-        return solve_crm(state, window, settings, no_service_days, vault_capacity)
+        return solve_crm(state, window, settings, no_service_days, state.capacity[TOTAL])
     return solve_atm(state, window, settings, no_service_days)
 
 
@@ -162,15 +174,8 @@ def plan_all(
     origin_date = pd.Timestamp(origin_date)
     data = data or load_planning_data(track)
     states = states or initial_states(data)
-    machines_cfg = load_config("machines")
     model_cfg = load_config("model")
-    settings = PlanSettings(
-        alpha=alpha,
-        costs=load_config("costs"),
-        lead_days=machines_cfg.order_lead_days,
-        bundle_notes=machines_cfg.bundle_notes,
-        largest_note=max(int(d) for d in machines_cfg.atm.cassettes),
-    )
+    settings = plan_settings(alpha)
     if origin_date not in data.forecasts:
         raise ValueError(f"no forecasts for origin {origin_date.date()} on {track}")
 
@@ -182,15 +187,7 @@ def plan_all(
             for t in range(1, window.horizon + 1)
             if origin_date + pd.Timedelta(days=t) in data.no_service_dates
         }
-        jobs.append(
-            delayed(_solve_one)(
-                states[row.machine_id],
-                window,
-                settings,
-                no_service,
-                machines_cfg.crm.vault_capacity_lkr,
-            )
-        )
+        jobs.append(delayed(solve_machine)(states[row.machine_id], window, settings, no_service))
     return Parallel(n_jobs=model_cfg.n_jobs)(jobs)
 
 

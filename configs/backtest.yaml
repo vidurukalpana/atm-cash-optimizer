@@ -2,12 +2,13 @@
 test_days: 280                   # last N days of each track
 warmup_days: 14                  # excluded from metrics
 report_horizons: [1, 3, 7, 14]   # horizons shown in forecast metrics
+simulation_machines: 10          # seeded sample per track (ATMs and CRMs in proportion); 10 keeps a run ≈ 5 min
 
 # Parameter values tried for each policy.
 sweeps:
-  threshold: [0.10, 0.20, 0.30, 0.40, 0.50]
+  threshold: [0.20, 0.30, 0.40]
   buffer: [0.10, 0.25, 0.40, 0.60]
-  alpha: [0.80, 0.90, 0.95, 0.98]
+  alpha: [0.90, 0.95]             # must be forecast quantiles
 
 fixed_schedule_weekday: 0        # 0 = Monday ... 6 = Sunday
 

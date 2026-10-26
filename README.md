@@ -92,3 +92,17 @@ python -m atm_cash_optimizer.optimization.planner --track lk --date 2025-08-10 -
 
 One PuLP/CBC model per machine (ATMs per denomination, CRMs on total cash with removals);
 `plan_all(...)` in `optimization/planner.py` is what the simulation calls every day.
+
+## Simulation results
+
+```bash
+# time 10 days first (writes nothing), then replay 280 days per track (10 machines, 4 cores)
+python -m atm_cash_optimizer.simulation.run --track lk --timing 10
+python -m atm_cash_optimizer.simulation.run --track nn5     # ~1.5 min
+python -m atm_cash_optimizer.simulation.run --track lk      # ~3 min
+```
+
+Compares a fixed Monday schedule, refill-below-threshold rules and the optimizer under the same
+rules. Writes `sim_daily_<track>`, `sim_summary_<track>`, `orders_<track>`
+(+ `data/orders/orders_<track>.csv`), `reports/results_<track>.md` and
+`reports/frontier_<track>.html`.
