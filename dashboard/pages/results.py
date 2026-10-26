@@ -6,7 +6,7 @@ import streamlit as st
 import ui
 from atm_cash_optimizer.simulation.compare import best_settings, breakdown, savings
 from atm_cash_optimizer.simulation.metrics import network_totals
-from data import sim_summary
+from data import sim_summary, simulation_info
 
 track = ui.current_track()
 summary = sim_summary(track)
@@ -19,8 +19,9 @@ result = savings(best)
 
 ui.header("Results", "Smart cash planning compared with simple refill rules")
 ui.simulated_badge(track)
+ui.simulation_chips(simulation_info(track), full=True)
 
-with st.expander("What do these mean?"):
+with st.expander("What Do These Mean?"):
     st.markdown(
         "- **Smart plan**: forecasts each machine's demand and plans the cheapest van visits.\n"
         "- **Refill rule**: send a van when cash drops below a set level, and fill it up.\n"
@@ -29,11 +30,11 @@ with st.expander("What do these mean?"):
 
 empty_gap = 100 * (result["optimizer_stockout_rate"] - result["baseline_stockout_rate"])
 cols = st.columns(4)
-cols[0].metric("Cost saving", f"{result['saving_pct']:.1f}%")
-cols[1].metric("Smart plan cost", ui.lkr_millions(result["optimizer_cost"]))
-cols[2].metric("Best simple rule cost", ui.lkr_millions(result["baseline_cost"]))
+cols[0].metric("Cost Saving", f"{result['saving_pct']:.1f}%")
+cols[1].metric("Smart Plan Cost", ui.lkr_millions(result["optimizer_cost"]))
+cols[2].metric("Best Simple Rule Cost", ui.lkr_millions(result["baseline_cost"]))
 cols[3].metric(
-    "Days machines ran empty",
+    "Days Machines Ran Empty",
     f"{result['optimizer_stockout_rate']:.2%}",
     delta=f"{empty_gap:+.2f} pts vs best rule",
     delta_color="inverse",
@@ -60,13 +61,13 @@ def ranked_bars(column: str, scale: float, label: str, fmt: str):
     return fig
 
 
-st.subheader("Strategy comparison")
+st.subheader("Strategy Comparison")
 st.caption("Shorter bars are better.")
 left, right = st.columns(2)
-left.plotly_chart(ranked_bars("total_cost", 1e-6, "Total cost (LKR M)", "%{x:.1f}"))
-right.plotly_chart(ranked_bars("stockout_rate", 100, "Days machines ran empty (%)", "%{x:.1f}%"))
+left.plotly_chart(ranked_bars("total_cost", 1e-6, "Total Cost (LKR M)", "%{x:.1f}"))
+right.plotly_chart(ranked_bars("stockout_rate", 100, "Days Machines Ran Empty (%)", "%{x:.1f}%"))
 
-st.subheader("All strategies")
+st.subheader("All Strategies")
 table = network.assign(
     total_cost=network["total_cost"] / 1e6,
     avg_idle_cash=network["avg_idle_cash"] / 1e6,
@@ -78,21 +79,21 @@ st.dataframe(
     hide_index=True,
     column_config={
         "setting": "Strategy",
-        "total_cost": st.column_config.NumberColumn("Total cost (LKR M)", format="%.2f"),
-        "visits": st.column_config.NumberColumn("Van visits", format="%d"),
-        "emergency_visits": st.column_config.NumberColumn("Emergency visits", format="%d"),
-        "stockout_rate": st.column_config.NumberColumn("Ran empty (% of days)", format="%.2f"),
+        "total_cost": st.column_config.NumberColumn("Total Cost (LKR M)", format="%.2f"),
+        "visits": st.column_config.NumberColumn("Van Visits", format="%d"),
+        "emergency_visits": st.column_config.NumberColumn("Emergency Visits", format="%d"),
+        "stockout_rate": st.column_config.NumberColumn("Ran Empty (% of Days)", format="%.2f"),
         "avg_idle_cash": st.column_config.NumberColumn(
-            "Cash left in machine (LKR M)", format="%.2f"
+            "Cash Left in Machine (LKR M)", format="%.2f"
         ),
     },
 )
 
-segments = {"machine_type": "By machine type", "location_type": "By location"}
+segments = {"machine_type": "By Machine Type", "location_type": "By Location"}
 parts = {by: breakdown(summary, best, by) for by in segments}
 parts = {by: part for by, part in parts.items() if not part.empty}
 if parts:
-    st.subheader("Cost of each strategy's best setting")
+    st.subheader("Best Setting of Each Strategy")
     for tab, (by, part) in zip(st.tabs([segments[b] for b in parts]), parts.items(), strict=True):
         with tab:
             bars = px.bar(
@@ -104,5 +105,5 @@ if parts:
             )
             bars = ui.style_figure(bars, height=340)
             bars.update_xaxes(title=None)
-            bars.update_yaxes(title="Total cost (LKR M)")
+            bars.update_yaxes(title="Total Cost (LKR M)")
             st.plotly_chart(bars)

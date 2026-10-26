@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 import streamlit as st
 
+from atm_cash_optimizer.config import load_config
 from atm_cash_optimizer.io import query
 from atm_cash_optimizer.optimization.planner import capacity_and_shares
 
-TRACKS = {"lk": "Sri Lanka (simulated)", "nn5": "UK ATMs (real data)"}
+TRACKS = {"lk": "Sri Lanka (Simulated)", "nn5": "UK ATMs (Real Data)"}
 
 
 def _check(track: str) -> None:
     # Track names go into SQL, so only known names are accepted.
     if track not in TRACKS:
         raise ValueError(f"unknown track {track!r}")
+
+
+def _check_machine(machine_id: str) -> None:
+    if not re.fullmatch(r"[A-Z0-9_]+", machine_id):
+        raise ValueError(f"invalid machine id {machine_id!r}")
 
 
 @st.cache_data(show_spinner=False)
@@ -85,4 +93,48 @@ def capacities(track: str) -> dict[str, dict[str, float]]:
     return {
         row.machine_id: capacity_and_shares(track, row.machine_type, row.location_type)[0]
         for row in machines.drop_duplicates("machine_id").itertuples()
+    }
+
+
+@st.cache_data(show_spinner=False)
+def machine_forecasts(track: str, machine_id: str) -> pd.DataFrame:
+    """Quantile forecasts of one machine's withdrawals for every origin date."""
+    _check(track)
+    _check_machine(machine_id)
+    return query(
+        f"""
+        select * from forecasts_{track}
+        where model = 'quantile_lgbm' and target = 'withdrawals' and machine_id = '{machine_id}'
+        order by origin_date, h
+        """
+    )
+
+
+@st.cache_data(show_spinner=False)
+def machine_withdrawals(track: str, machine_id: str) -> pd.Series:
+    """Real daily withdrawals of one machine, indexed by date."""
+    _check(track)
+    _check_machine(machine_id)
+    rows = query(
+        f"select date, withdrawals_lkr from {track}_daily where machine_id = '{machine_id}'"
+    )
+    return rows.set_index("date")["withdrawals_lkr"].sort_index()
+
+
+@st.cache_data(show_spinner=False)
+def simulation_info(track: str) -> dict:
+    """Sample size, period and warmup of the simulation."""
+    _check(track)
+    machines = sim_summary(track).drop_duplicates("machine_id")["machine_type"]
+    period = query(f"select min(date) as first, max(date) as last from sim_daily_{track}").iloc[0]
+    first, last = pd.Timestamp(period["first"]), pd.Timestamp(period["last"])
+    return {
+        "machines": len(machines),
+        "atms": int((machines == "ATM").sum()),
+        "crms": int((machines == "CRM").sum()),
+        "first_date": first,
+        "last_date": last,
+        "days": (last - first).days + 1,
+        "warmup_days": load_config("backtest").warmup_days,
+        "network_machines": track_overview(track)["machines"],
     }

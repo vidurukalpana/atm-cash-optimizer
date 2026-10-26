@@ -1,4 +1,4 @@
-"""Machines: status of every simulated machine on the last simulated day."""
+"""Cash Status: cash and alerts of every simulated machine on the last simulated day."""
 
 import pandas as pd
 import streamlit as st
@@ -6,13 +6,12 @@ import streamlit as st
 import ui
 from atm_cash_optimizer.simulation.compare import best_settings
 from atm_cash_optimizer.simulation.metrics import network_totals
-from data import capacities, orders, sim_daily, sim_summary
+from data import capacities, orders, sim_daily, sim_summary, simulation_info
 
 LOW_CASH_SHARE = 0.2  # a note type below 20% of its space counts as low
 RECENT_DAYS = 7
-STATUS_COLORS = {"OK": ui.TEAL, "Low cash": "#B45309", "Ran empty": "#DC2626"}
-MACHINE_TYPES = {"ATM": "ATM", "CRM": "Cash recycler"}
-ACTIONS = {"LOAD": "Load", "REMOVE": "Remove", "LOAD_AND_REMOVE": "Load and remove"}
+STATUS_COLORS = {"OK": ui.TEAL, "Low Cash": "#B45309", "Ran Empty": "#DC2626"}
+ACTIONS = {"LOAD": "Load", "REMOVE": "Remove", "LOAD_AND_REMOVE": "Load and Remove"}
 
 track = ui.current_track()
 summary = sim_summary(track)
@@ -21,8 +20,9 @@ best_alpha = best_settings(network).query("policy == 'optimizer'")["param"].iloc
 options = list(network.index)
 default = network.index[(network["policy"] == "optimizer") & (network["param"] == best_alpha)][0]
 
-ui.header("Machines", "Status of every machine on the latest day")
+ui.header("Cash Status", "Cash and alerts of every machine on the latest day")
 ui.simulated_badge(track)
+ui.simulation_chips(simulation_info(track))
 
 choice = st.selectbox(
     "Strategy",
@@ -45,16 +45,16 @@ for machine_id, capacity in capacities(track).items():
     cash = latest.loc[machine_id]
     lowest = min(cash[f"end_cash_{d}_lkr"] / space for d, space in capacity.items())
     if ran_empty[machine_id]:
-        status = "Ran empty"
+        status = "Ran Empty"
     elif lowest < LOW_CASH_SHARE:
-        status = "Low cash"
+        status = "Low Cash"
     else:
         status = "OK"
     location = machines.at[machine_id, "location_type"]
     rows.append(
         {
             "Machine": machine_id,
-            "Type": MACHINE_TYPES[machines.at[machine_id, "machine_type"]],
+            "Type": machines.at[machine_id, "machine_type"],
             "Location": location.replace("_", " ").title() if isinstance(location, str) else "—",
             "Cash (LKR M)": cash["end_cash"] / 1e6,
             "Fill": 100 * cash["end_cash"] / sum(capacity.values()),
@@ -66,13 +66,13 @@ status = pd.DataFrame(rows)
 counts = status["Status"].value_counts()
 cols = st.columns(4)
 cols[0].metric("Machines OK", int(counts.get("OK", 0)))
-cols[1].metric("Low cash", int(counts.get("Low cash", 0)))
-cols[2].metric(f"Ran empty (last {RECENT_DAYS} days)", int(counts.get("Ran empty", 0)))
-cols[3].metric("Cash in machines", ui.lkr_millions(latest["end_cash"].sum()))
+cols[1].metric("Low Cash", int(counts.get("Low Cash", 0)))
+cols[2].metric(f"Ran Empty (Last {RECENT_DAYS} Days)", int(counts.get("Ran Empty", 0)))
+cols[3].metric("Cash in Machines", ui.lkr_millions(latest["end_cash"].sum()))
 
 st.subheader(f"Machines on {last_day:%d %b %Y}")
-show = st.segmented_control("Show", ["All", "Needs attention"], default="All")
-if show == "Needs attention":
+show = st.segmented_control("Show", ["All", "Needs Attention"], default="All")
+if show == "Needs Attention":
     status = status[status["Status"] != "OK"]
 st.dataframe(
     status.style.map(lambda s: f"color: {STATUS_COLORS[s]}; font-weight: 600", subset=["Status"]),
@@ -83,7 +83,7 @@ st.dataframe(
     },
 )
 
-st.subheader("Van visits on this day")
+st.subheader("Van Visits on This Day")
 visits = orders(track)
 visits = visits[
     (visits["policy"] == policy) & (visits["param"] == param) & (visits["visit_date"] == last_day)
