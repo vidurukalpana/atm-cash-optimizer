@@ -13,7 +13,7 @@ ui.simulated_badge(track)
 
 cols = st.columns(4)
 cols[0].metric("ATMs", info["atms"])
-cols[1].metric("CRMs", info["crms"])
+cols[1].metric("Cash recyclers", info["crms"])
 cols[2].metric("Days of history", f"{info['days']:,}")
 cols[3].metric("Simulated machines", info["simulated_machines"])
 
@@ -29,4 +29,4 @@ with steps[1]:
 with steps[2]:
     ui.step_card(3, "Simulate", "Replay past days, day by day")
 with steps[3]:
-    ui.step_card(4, "Compare", "Cost and stockouts vs simple rules")
+    ui.step_card(4, "Compare", "Cost and empty machines vs simple rules")

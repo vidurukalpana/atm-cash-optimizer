@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import plotly.graph_objects as go
 import streamlit as st
 
 from data import TRACKS, available_tracks
@@ -13,6 +14,14 @@ SKY = "#F3F7FD"
 LINE = "#DCE6F5"
 TEAL = "#0EA5A4"
 MUTED = "#64748B"
+SLATE = "#94A3B8"
+
+POLICY_COLORS = {"optimizer": BRIGHT, "threshold": TEAL, "fixed_schedule": SLATE}
+POLICY_NAMES = {
+    "optimizer": "Smart plan",
+    "threshold": "Refill rule",
+    "fixed_schedule": "Weekly visit",
+}
 
 _CSS = f"""
 <style>
@@ -46,6 +55,7 @@ _CSS = f"""
 [data-testid="stMetric"] {{
     background: #FFFFFF; border: 1px solid {LINE}; border-left: 5px solid {BRIGHT};
     border-radius: 12px; padding: 0.9rem 1.1rem; box-shadow: 0 2px 10px rgba(31,78,158,0.07);
+    height: 8.2rem; box-sizing: border-box;
 }}
 [data-testid="stMetricLabel"] p {{ color: {MUTED}; font-size: 0.85rem; font-weight: 500; }}
 [data-testid="stMetricValue"] {{ color: {NAVY}; font-weight: 600; }}
@@ -102,3 +112,37 @@ def step_card(number: int, title: str, text: str) -> None:
         f'<div class="step"><span class="num">{number}</span><h4>{title}</h4><p>{text}</p></div>',
         unsafe_allow_html=True,
     )
+
+
+def setting_name(policy: str, param: float) -> str:
+    """Plain display name of a policy setting, e.g. ``Refill below 20%``."""
+    if policy == "optimizer":
+        return f"Smart plan ({param:.0%} safety)"
+    if policy == "threshold":
+        return f"Refill below {param:.0%}"
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    return f"Weekly visit ({days[int(param)]})"
+
+
+def lkr_millions(value: float) -> str:
+    return f"LKR {value / 1e6:,.2f}M"
+
+
+def style_figure(fig: go.Figure, height: int = 380) -> go.Figure:
+    """Dashboard look for Plotly charts: Inter font, policy colours, light grid, no title."""
+    fig.update_layout(
+        title=None,
+        height=height,
+        font={"family": "Inter, -apple-system, sans-serif", "color": NAVY, "size": 13},
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF",
+        margin={"l": 10, "r": 10, "t": 30, "b": 10},
+        legend={"orientation": "h", "y": 1.08, "x": 0, "title": None},
+    )
+    fig.update_xaxes(gridcolor=LINE, zeroline=False)
+    fig.update_yaxes(gridcolor=LINE, zeroline=False)
+    for trace in fig.data:
+        if trace.name in POLICY_COLORS:
+            trace.marker.color = POLICY_COLORS[trace.name]
+            trace.name = POLICY_NAMES[trace.name]
+    return fig

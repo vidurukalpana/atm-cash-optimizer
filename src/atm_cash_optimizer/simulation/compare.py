@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 from atm_cash_optimizer.io import markdown_table
 from atm_cash_optimizer.simulation.metrics import network_totals
@@ -62,8 +63,8 @@ def breakdown(summary: pd.DataFrame, best: pd.DataFrame, by: str) -> pd.DataFram
     return grouped.reset_index()
 
 
-def frontier_chart(network: pd.DataFrame, track: str, path: Path) -> None:
-    """Stockout rate vs total cost, one point per policy setting (HTML)."""
+def frontier_figure(network: pd.DataFrame, track: str) -> go.Figure:
+    """Stockout rate vs total cost, one point per policy setting."""
     df = network.assign(setting=_labels(network))
     fig = px.scatter(
         df,
@@ -78,7 +79,12 @@ def frontier_chart(network: pd.DataFrame, track: str, path: Path) -> None:
         },
     )
     fig.update_traces(textposition="top center")
-    fig.write_html(path, include_plotlyjs="cdn")
+    return fig
+
+
+def frontier_chart(network: pd.DataFrame, track: str, path: Path) -> None:
+    """Save :func:`frontier_figure` as an HTML file."""
+    frontier_figure(network, track).write_html(path, include_plotlyjs="cdn")
 
 
 def results_report(

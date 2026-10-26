@@ -54,3 +54,10 @@ def track_overview(track: str) -> dict:
         "simulated_machines": int(simulated["n"]),
         "simulated_days": int(simulated["days"]),
     }
+
+
+@st.cache_data(show_spinner=False)
+def sim_summary(track: str) -> pd.DataFrame:
+    """Per policy setting and machine: the simulation metrics plus machine type and location."""
+    _check(track)
+    return query(f"select * from sim_summary_{track}")
