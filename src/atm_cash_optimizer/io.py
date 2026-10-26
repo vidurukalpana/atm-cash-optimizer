@@ -22,9 +22,11 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR_ENV = "ATM_DATA_DIR"
 DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+DEFAULT_REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
 WAREHOUSE_FILE = "warehouse.duckdb"
 
 _TABLE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+_QUERY_NAME = re.compile(r"^--\s*name:\s*(\w+)\s*$", re.MULTILINE)
 
 
 def get_data_dir(data_dir: str | Path | None = None) -> Path:
@@ -33,6 +35,11 @@ def get_data_dir(data_dir: str | Path | None = None) -> Path:
         return Path(data_dir)
     env_dir = os.environ.get(DATA_DIR_ENV)
     return Path(env_dir) if env_dir else DEFAULT_DATA_DIR
+
+
+def get_reports_dir(reports_dir: str | Path | None = None) -> Path:
+    """Return the reports directory: argument, else ``<repo>/reports``."""
+    return Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
 
 
 def _check_name(name: str) -> None:
@@ -75,3 +82,22 @@ def read_table(name: str, data_dir: str | Path | None = None) -> pd.DataFrame:
     if not path.is_file():
         raise FileNotFoundError(f"table {name!r} not found at {path}")
     return pd.read_parquet(path)
+
+
+def query(sql: str, data_dir: str | Path | None = None) -> pd.DataFrame:
+    """Run ``sql`` on the DuckDB warehouse through a read-only connection."""
+    with duckdb.connect(str(get_data_dir(data_dir) / WAREHOUSE_FILE), read_only=True) as con:
+        return con.sql(sql).df()
+
+
+def read_sql_queries(path: str | Path) -> dict[str, str]:
+    """Split a ``.sql`` file into named queries.
+
+    Each query starts with a line ``-- name: <query_name>``; the text up to the next such line
+    is the query.
+    """
+    parts = _QUERY_NAME.split(Path(path).read_text(encoding="utf-8"))
+    # parts = [preamble, name1, body1, name2, body2, ...]
+    return {
+        name: body.strip().rstrip(";") for name, body in zip(parts[1::2], parts[2::2], strict=True)
+    }

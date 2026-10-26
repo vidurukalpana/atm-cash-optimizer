@@ -1,1 +1,1 @@
-"""analysis subpackage (implemented in a later branch)."""
+"""Exploratory analysis: demand profiles and machine clustering."""
