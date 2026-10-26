@@ -79,7 +79,6 @@ img { max-width: 100%; display: block; }
 }
 .btn:hover { text-decoration: none; transform: translateY(-1px); }
 .btn-primary { background: #fff; color: var(--navy); }
-.btn-ghost { border: 1.5px solid rgba(255, 255, 255, 0.6); color: #fff; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 48px; }
 .stat {
   background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18);
