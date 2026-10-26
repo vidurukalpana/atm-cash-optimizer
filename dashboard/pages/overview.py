@@ -12,19 +12,20 @@ ui.header("ATM Cash Optimizer", "Forecast-driven cash planning for ATMs and cash
 ui.simulated_badge(track)
 
 cols = st.columns(4)
-cols[0].metric("Machines", info["machines"])
-cols[1].metric("ATMs · CRMs", f"{info['atms']} · {info['crms']}")
+cols[0].metric("ATMs", info["atms"])
+cols[1].metric("CRMs", info["crms"])
 cols[2].metric("Days of history", f"{info['days']:,}")
 cols[3].metric("Simulated machines", info["simulated_machines"])
 
-st.caption(f"{TRACKS[track]} · {info['first_date']:%d %b %Y} – {info['last_date']:%d %b %Y}")
+period = f"{info['first_date']:%d %b %Y} to {info['last_date']:%d %b %Y}"
+st.caption(f"{TRACKS[track]}: {info['machines']} machines, {period}")
 
 st.subheader("How it works")
 steps = st.columns(4)
 with steps[0]:
     ui.step_card(1, "Forecast", "Demand range for the next 14 days")
 with steps[1]:
-    ui.step_card(2, "Plan", "Cheapest visits and amounts per note")
+    ui.step_card(2, "Plan", "Cheapest visits and amounts")
 with steps[2]:
     ui.step_card(3, "Simulate", "Replay past days, day by day")
 with steps[3]:
