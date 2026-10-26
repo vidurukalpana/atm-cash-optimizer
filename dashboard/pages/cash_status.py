@@ -68,7 +68,7 @@ cols = st.columns(4)
 cols[0].metric("Machines OK", int(counts.get("OK", 0)))
 cols[1].metric("Low Cash", int(counts.get("Low Cash", 0)))
 cols[2].metric(f"Ran Empty (Last {RECENT_DAYS} Days)", int(counts.get("Ran Empty", 0)))
-cols[3].metric("Cash in Machines", ui.lkr_millions(latest["end_cash"].sum()))
+cols[3].metric("Cash in Machines (LKR)", ui.lkr_millions(latest["end_cash"].sum()))
 
 st.subheader(f"Machines on {last_day:%d %b %Y}")
 show = st.segmented_control("Show", ["All", "Needs Attention"], default="All")
