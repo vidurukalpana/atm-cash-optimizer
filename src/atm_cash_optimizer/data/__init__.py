@@ -1,1 +1,1 @@
-"""data subpackage (implemented in a later branch)."""
+"""Download, parse, impute, validate and store the NN5 withdrawals data."""
