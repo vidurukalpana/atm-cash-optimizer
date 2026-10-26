@@ -161,6 +161,8 @@ class ModelConfig(_Config):
     retrain_every_days: PositiveInt
     min_train_days: PositiveInt
     lightgbm: LightGBMParams
+    n_jobs: PositiveInt
+    ets_train_days: PositiveInt
     seed: NonNegativeInt
 
     @field_validator("quantiles")
@@ -208,10 +210,16 @@ class BacktestConfig(_Config):
 
     test_days: PositiveInt
     warmup_days: NonNegativeInt
+    report_horizons: list[PositiveInt] = Field(min_length=1)
     sweeps: SweepsConfig
     fixed_schedule_weekday: Annotated[int, Field(ge=0, le=6)]
     sensitivity: SensitivityConfig
     seed: NonNegativeInt
+
+    @field_validator("report_horizons")
+    @classmethod
+    def _sorted_horizons(cls, v: list[int]) -> list[int]:
+        return _check_sorted_unique(v, "report_horizons")
 
     @model_validator(mode="after")
     def _warmup_shorter_than_test(self) -> BacktestConfig:
