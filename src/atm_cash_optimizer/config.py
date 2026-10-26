@@ -163,6 +163,10 @@ class ModelConfig(_Config):
     lightgbm: LightGBMParams
     n_jobs: PositiveInt
     ets_train_days: PositiveInt
+    quantile_retrain_every_days: PositiveInt
+    quantile_train_days: PositiveInt
+    train_origin_step: PositiveInt
+    calibration_tolerance: Annotated[float, Field(ge=0, lt=1)]
     seed: NonNegativeInt
 
     @field_validator("quantiles")
@@ -178,6 +182,14 @@ class ModelConfig(_Config):
     @classmethod
     def _sorted(cls, v: list[int], info: ValidationInfo) -> list[int]:
         return _check_sorted_unique(v, info.field_name)
+
+    @field_validator("train_origin_step")
+    @classmethod
+    def _all_weekdays(cls, v: int) -> int:
+        # A multiple of 7 would sample origins on one weekday only.
+        if v % 7 == 0:
+            raise ValueError("train_origin_step must not be a multiple of 7")
+        return v
 
 
 # --------------------------------------------------------------------------------------------

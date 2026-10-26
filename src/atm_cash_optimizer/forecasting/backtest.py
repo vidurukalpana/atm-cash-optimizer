@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from atm_cash_optimizer.io import read_table
+from atm_cash_optimizer.io import read_table, write_table
 
 TRACKS = ("nn5", "lk")
 
@@ -90,6 +90,19 @@ def history_slice(origin_index: int, days: int | None = None) -> slice:
     """Array slice of the history up to and including ``origin_index`` (last ``days`` days)."""
     start = 0 if days is None else max(0, origin_index - days + 1)
     return slice(start, origin_index + 1)
+
+
+def save_forecasts(track: str, new: pd.DataFrame) -> None:
+    """Write ``forecasts_<track>``, replacing only the models in ``new`` (others are kept)."""
+    name = f"forecasts_{track}"
+    try:
+        existing = read_table(name)
+        new = pd.concat(
+            [existing[~existing["model"].isin(new["model"].unique())], new], ignore_index=True
+        )
+    except FileNotFoundError:
+        pass
+    write_table(new, name)
 
 
 def cumulative_actuals(panel: SeriesPanel, origin_idx: np.ndarray, horizon: int) -> np.ndarray:

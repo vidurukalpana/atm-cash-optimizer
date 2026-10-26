@@ -70,3 +70,15 @@ python -m atm_cash_optimizer.forecasting.baselines      # --track nn5|lk|all --m
 # browse the results
 mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 ```
+
+## Quantile forecasts (LightGBM)
+
+```bash
+# time one retrain round first (writes nothing), then the full backtest per track
+python -m atm_cash_optimizer.forecasting.train --track lk --timing 1
+python -m atm_cash_optimizer.forecasting.train --track nn5     # ~2.5 min, 4 cores
+python -m atm_cash_optimizer.forecasting.train --track lk      # ~4.5 min, 4 cores
+```
+
+Writes `forecasts_<track>` (`model = quantile_lgbm`), `calibration_<track>`,
+`reports/forecast_comparison_<track>.md` and MLflow experiment `forecast-quantile`.
