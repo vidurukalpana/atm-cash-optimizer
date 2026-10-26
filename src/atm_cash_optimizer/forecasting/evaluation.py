@@ -1,17 +1,7 @@
-"""Forecast accuracy: MAE, sMAPE, pinball loss and interval coverage, by horizon and segment.
+"""Forecast accuracy by horizon and segment, plus the MLflow setup.
 
-All metrics compare a forecast of ``y_cum(o, h)`` with the true cumulative demand.
-
-- **MAE** — mean absolute error, in LKR.
-- **sMAPE** — mean of ``2·|f − a| / (|f| + |a|)``, in %. Unstable when demand is near zero
-  (CRM ``net``), so read MAE for that target.
-- **pinball** — quantile loss averaged over the quantiles a model provides (for a median-only
-  forecast this is MAE / 2).
-- **coverage_90** — share of actuals inside ``[q05, q95]``; empty for median-only forecasts.
-
-Segments: ``all``; ``calendar`` (``holiday_window`` if any day in ``o+1 .. o+h`` is a public
-holiday, long-weekend eve or festival day — UK holidays for ``nn5`` — else ``normal``);
-``location_type``; ``machine_type``.
+Metrics: MAE (LKR), sMAPE (%, unreliable near zero, e.g. CRM ``net``), pinball loss and
+coverage. Segments: all, calendar (``holiday_window`` vs ``normal``), location and machine type.
 """
 
 from __future__ import annotations
@@ -31,13 +21,11 @@ MLFLOW_DIR = DEFAULT_DATA_DIR.parent / "mlruns"
 
 
 def quantile_column(q: float) -> str:
-    """Column name of a quantile, e.g. ``0.05`` → ``q05``."""
+    """``0.05`` → ``q05``."""
     return f"q{round(q * 100):02d}"
 
 
-# --------------------------------------------------------------------------------------------
-# Metrics on arrays
-# --------------------------------------------------------------------------------------------
+# --- Metrics on arrays ---
 
 
 def mae(actual: np.ndarray, forecast: np.ndarray) -> float:
@@ -46,7 +34,7 @@ def mae(actual: np.ndarray, forecast: np.ndarray) -> float:
 
 
 def smape(actual: np.ndarray, forecast: np.ndarray) -> float:
-    """Symmetric mean absolute percentage error in % (0 where both are 0)."""
+    """Symmetric MAPE in % (0 where both values are 0)."""
     denominator = np.abs(forecast) + np.abs(actual)
     terms = np.divide(
         2 * np.abs(forecast - actual),
@@ -58,7 +46,7 @@ def smape(actual: np.ndarray, forecast: np.ndarray) -> float:
 
 
 def pinball(actual: np.ndarray, forecast: np.ndarray, q: float) -> float:
-    """Pinball (quantile) loss of forecasts of quantile ``q``."""
+    """Pinball (quantile) loss for quantile ``q``."""
     diff = actual - forecast
     return float(np.mean(np.maximum(q * diff, (q - 1) * diff)))
 
@@ -69,18 +57,14 @@ def coverage(actual: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> float:
 
 
 def quantile_coverage(actual: np.ndarray, forecast: np.ndarray) -> float:
-    """Share of actuals at or below a quantile forecast (should be close to its level)."""
+    """Share of actuals at or below the forecast (should match its level)."""
     return float(np.mean(actual <= forecast))
 
 
 def pinball_by_quantile(
     df: pd.DataFrame, quantiles: list[float], horizons: list[int]
 ) -> pd.DataFrame:
-    """Pinball loss of each quantile forecast per target and horizon (rows need ``actual``).
-
-    Returns:
-        ``target, h, quantile, pinball``.
-    """
+    """``target, h, quantile, pinball`` for each quantile column."""
     df = df[df["h"].isin(horizons) & df["actual"].notna()]
     rows = []
     for (target, h), group in df.groupby(["target", "h"]):
@@ -92,7 +76,7 @@ def pinball_by_quantile(
 
 
 def use_mlflow_experiment(name: str) -> None:
-    """Point MLflow at ``mlruns/`` (SQLite + artifacts) and select experiment ``name``."""
+    """Use ``mlruns/`` (SQLite + artifacts) and select experiment ``name``."""
     import mlflow
 
     MLFLOW_DIR.mkdir(exist_ok=True)
@@ -102,9 +86,7 @@ def use_mlflow_experiment(name: str) -> None:
     mlflow.set_experiment(name)
 
 
-# --------------------------------------------------------------------------------------------
-# Backtest frames (same row order as baselines.to_frame: series, origin, h)
-# --------------------------------------------------------------------------------------------
+# --- Backtest frames (row order: series, origin, h — as in baselines.to_frame) ---
 
 
 def _index_frame(panel: SeriesPanel, origin_idx: np.ndarray, horizon: int) -> pd.DataFrame:
@@ -122,14 +104,14 @@ def _index_frame(panel: SeriesPanel, origin_idx: np.ndarray, horizon: int) -> pd
 def cumulative_actuals_frame(
     panel: SeriesPanel, origin_idx: np.ndarray, horizon: int
 ) -> pd.DataFrame:
-    """``KEYS`` + ``actual`` (true ``y_cum``; NaN past the end of the data)."""
+    """Backtest keys + ``actual`` (true ``y_cum``)."""
     out = _index_frame(panel, origin_idx, horizon)
     out["actual"] = cumulative_actuals(panel, origin_idx, horizon).ravel()
     return out
 
 
 def special_days(track: str, dates: pd.DatetimeIndex) -> np.ndarray:
-    """True on holiday-like days: public holidays, long-weekend eves and festival windows."""
+    """Holiday-like days: public holidays, long-weekend eves, festival windows."""
     if track == "nn5":
         return uk_holiday_mask(pd.Series(dates), load_config("scenario")).to_numpy()
     cal = read_table("lk_calendar").set_index("date").reindex(dates)
@@ -141,7 +123,7 @@ def special_days(track: str, dates: pd.DatetimeIndex) -> np.ndarray:
 def segment_frame(
     track: str, panel: SeriesPanel, origin_idx: np.ndarray, horizon: int
 ) -> pd.DataFrame:
-    """``KEYS`` + one column per segment type (see the module docstring)."""
+    """Backtest keys + one column per segment type."""
     out = _index_frame(panel, origin_idx, horizon)
     cs = np.cumsum(special_days(track, panel.dates))
     end = np.minimum(origin_idx[:, None] + np.arange(1, horizon + 1), len(panel.dates) - 1)
@@ -155,9 +137,7 @@ def segment_frame(
     return out
 
 
-# --------------------------------------------------------------------------------------------
-# Report
-# --------------------------------------------------------------------------------------------
+# --- Report ---
 
 
 def evaluate(
@@ -166,12 +146,7 @@ def evaluate(
     segments: pd.DataFrame,
     report_horizons: list[int],
 ) -> pd.DataFrame:
-    """Metrics per model, target, segment and horizon.
-
-    Returns:
-        Long table: ``model, target, segment_type, segment, h, n, mae, smape, pinball,
-        coverage_90``. Rows without a known actual are left out.
-    """
+    """Metrics per model, target, segment and horizon (rows without an actual are skipped)."""
     df = forecasts.merge(actual, on=KEYS).merge(segments, on=KEYS)
     df = df[df["h"].isin(report_horizons) & df["actual"].notna()]
     quantile_cols = [c for c in df.columns if c.startswith("q") and c[1:].isdigit()]
@@ -207,7 +182,7 @@ def evaluate(
 
 
 def headline(metrics: pd.DataFrame) -> dict[str, float]:
-    """MAE and sMAPE over all series per target and report horizon, e.g. ``withdrawals_mae_h7``."""
+    """Overall MAE and sMAPE per target and horizon, e.g. ``withdrawals_mae_h7``."""
     overall = metrics[metrics["segment_type"] == "all"]
     out = {}
     for row in overall.itertuples():

@@ -1,9 +1,7 @@
-"""Rolling-origin backtest: which days are forecast from, and which data a forecast may use.
+"""Rolling-origin backtest: origins, leak-proof history and true cumulative demand.
 
-The test period is the last ``test_days`` days of a track. Every day before a test day is an
-**origin** ``o``: the forecast is made at the end of ``o`` and covers ``o+1 .. o+H``. Models are
-(re)trained on **retrain dates**, every ``retrain_every_days`` origins, using only data with
-``date <= retrain date`` (enforced by :func:`training_data` and :func:`history_slice`).
+The test period is the last ``test_days`` days; each day before a test day is an origin ``o``,
+forecasting ``o+1 .. o+H`` from data up to ``o`` only.
 """
 
 from __future__ import annotations
@@ -20,20 +18,15 @@ TRACKS = ("nn5", "lk")
 
 @dataclass(frozen=True)
 class SeriesPanel:
-    """All target series of a track as one matrix (series × days, same dates for all)."""
+    """All target series of a track as one matrix (series × days)."""
 
-    keys: pd.DataFrame
-    """One row per series: ``machine_id``, ``target``, ``location_type``, ``machine_type``."""
+    keys: pd.DataFrame  # machine_id, target, location_type, machine_type
     dates: pd.DatetimeIndex
-    values: np.ndarray
-    """Shape ``(len(keys), len(dates))``."""
+    values: np.ndarray  # (len(keys), len(dates))
 
 
 def load_series(track: str) -> SeriesPanel:
-    """Load the daily target series of a track.
-
-    ``withdrawals`` for every machine; on ``lk`` also ``net`` = withdrawals − deposits for CRMs.
-    """
+    """Daily ``withdrawals`` series; on ``lk`` also ``net`` = withdrawals − deposits (CRMs)."""
     if track == "nn5":
         nn5 = read_table("nn5_daily")
         df = nn5.assign(
@@ -57,43 +50,20 @@ def load_series(track: str) -> SeriesPanel:
 
 
 def origin_indices(n_days: int, test_days: int) -> np.ndarray:
-    """Positions of the origins: the day before each of the last ``test_days`` days."""
+    """Positions of the day before each of the last ``test_days`` days."""
     if test_days >= n_days:
         raise ValueError(f"test_days ({test_days}) must be smaller than the series ({n_days})")
     return np.arange(n_days - test_days - 1, n_days - 1)
 
 
-def origins(dates: pd.DatetimeIndex, test_days: int) -> pd.DatetimeIndex:
-    """Origin dates of the backtest (see :func:`origin_indices`)."""
-    return dates[origin_indices(len(dates), test_days)]
-
-
-def retrain_dates(origin_dates: pd.DatetimeIndex, every_days: int) -> pd.DatetimeIndex:
-    """Every ``every_days``-th origin, starting with the first one."""
-    return origin_dates[::every_days]
-
-
-def training_data(df: pd.DataFrame, cutoff: pd.Timestamp, days: int | None = None) -> pd.DataFrame:
-    """Rows with ``date <= cutoff`` (and, if ``days`` is given, only the last ``days`` days).
-
-    The only way models get training data, so nothing after ``cutoff`` can leak in.
-    """
-    keep = df["date"] <= cutoff
-    if days is not None:
-        keep &= df["date"] > cutoff - pd.Timedelta(days=days)
-    out = df[keep]
-    assert out["date"].max() <= cutoff, "training data after the cutoff"
-    return out
-
-
 def history_slice(origin_index: int, days: int | None = None) -> slice:
-    """Array slice of the history up to and including ``origin_index`` (last ``days`` days)."""
+    """Slice of the last ``days`` days up to and including ``origin_index``."""
     start = 0 if days is None else max(0, origin_index - days + 1)
     return slice(start, origin_index + 1)
 
 
 def save_forecasts(track: str, new: pd.DataFrame) -> None:
-    """Write ``forecasts_<track>``, replacing only the models in ``new`` (others are kept)."""
+    """Write ``forecasts_<track>``, replacing only the models in ``new``."""
     name = f"forecasts_{track}"
     try:
         existing = read_table(name)
@@ -106,10 +76,7 @@ def save_forecasts(track: str, new: pd.DataFrame) -> None:
 
 
 def cumulative_actuals(panel: SeriesPanel, origin_idx: np.ndarray, horizon: int) -> np.ndarray:
-    """True ``y_cum`` per series, origin and ``h = 1..horizon``; NaN past the end of the data.
-
-    Shape ``(n_series, n_origins, horizon)``.
-    """
+    """True ``y_cum`` as ``(series, origins, horizon)``; NaN past the data end."""
     cs = np.cumsum(panel.values, axis=1)
     end = origin_idx[:, None] + np.arange(1, horizon + 1)[None, :]
     valid = end < len(panel.dates)

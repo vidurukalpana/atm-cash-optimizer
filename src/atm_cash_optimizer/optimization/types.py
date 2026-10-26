@@ -1,7 +1,6 @@
-"""Inputs and outputs of the replenishment optimizer.
+"""Optimizer inputs and outputs.
 
-Days are counted from the origin ``o`` (the evening the plan is made): day ``t = 1..H`` is
-``o + t``. A visit on day ``t`` happens at the start of that day, before customers arrive.
+Day ``t = 1..H`` is ``origin + t``; a visit on day ``t`` happens before customers arrive.
 """
 
 from __future__ import annotations
@@ -13,15 +12,14 @@ import pandas as pd
 
 from atm_cash_optimizer.config import CostsConfig
 
-TOTAL = "total"  # the single "denomination" of CRMs and of the nn5 track
+TOTAL = "total"  # single "denomination" of CRMs and the nn5 track
 
 
 @dataclass(frozen=True)
 class MachineState:
-    """A machine at the end of the origin day.
+    """Cash, capacity and demand shares at the end of the origin day.
 
-    ``cash``, ``capacity`` and ``shares`` are keyed by denomination (``"5000"``, ``"1000"``,
-    ``"500"``), or by ``"total"`` for CRMs and the nn5 track.
+    Keyed by denomination (``"5000"``, ``"1000"``, ``"500"``) or ``"total"`` (CRMs, nn5).
     """
 
     machine_id: str
@@ -33,10 +31,7 @@ class MachineState:
 
 @dataclass(frozen=True)
 class ForecastWindow:
-    """Cumulative quantile forecasts ``C(o, h)`` for ``h = 1..H``.
-
-    For ATMs these are withdrawals; for CRMs net outflow (withdrawals − deposits).
-    """
+    """Cumulative quantiles for ``h = 1..H``: withdrawals (ATM) or net outflow (CRM)."""
 
     origin_date: pd.Timestamp
     quantiles: dict[float, np.ndarray]
@@ -46,13 +41,13 @@ class ForecastWindow:
         return len(next(iter(self.quantiles.values())))
 
     def get(self, q: float) -> np.ndarray:
-        """Forecast of quantile ``q``; raises if it was not forecast."""
+        """Quantile ``q``; raises if it was not forecast."""
         if q not in self.quantiles:
             raise ValueError(f"quantile {q} not available; have {sorted(self.quantiles)}")
         return self.quantiles[q]
 
     def lower(self, q: float) -> np.ndarray:
-        """The largest available quantile ``<= q`` (a safe stand-in for a missing low quantile)."""
+        """Largest available quantile ``<= q`` (a cautious stand-in for a missing one)."""
         candidates = [k for k in self.quantiles if k <= q + 1e-9]
         if not candidates:
             raise ValueError(f"no quantile at or below {q}; have {sorted(self.quantiles)}")
@@ -61,7 +56,7 @@ class ForecastWindow:
 
 @dataclass(frozen=True)
 class PlanSettings:
-    """Everything the solver needs besides the machine and its forecast."""
+    """Solver settings shared by all machines."""
 
     alpha: float
     costs: CostsConfig
@@ -70,14 +65,14 @@ class PlanSettings:
     largest_note: int  # bundle value of the "total" denomination = bundle_notes × largest_note
 
     def bundle_value(self, denomination: str) -> float:
-        """LKR value of one bundle of ``denomination``."""
+        """LKR value of one bundle (``total`` uses the largest note)."""
         note = self.largest_note if denomination == TOTAL else int(denomination)
         return float(self.bundle_notes * note)
 
 
 @dataclass(frozen=True)
 class Visit:
-    """One planned visit: what to load (per denomination) and how much to remove (CRM)."""
+    """One planned visit: load per denomination, and removal for CRMs."""
 
     day: int
     date: pd.Timestamp
@@ -99,6 +94,6 @@ class Plan:
     used_slack: bool = False
 
     def committed(self, lead_days: int) -> Visit | None:
-        """The decision to send now (rolling horizon): a visit on the first orderable day."""
+        """The decision to send now: the visit on the first orderable day, if any."""
         first_day = max(lead_days, 1)
         return next((v for v in self.visits if v.day == first_day), None)

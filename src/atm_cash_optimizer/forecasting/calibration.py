@@ -1,14 +1,8 @@
-"""Check and correct the coverage of quantile forecasts.
+"""Check and correct the coverage of quantile forecasts (conformal shifts).
 
-A ``q95`` forecast is honest when about 95 % of actual values fall at or below it. Before each
-retrain, the out-of-sample forecasts of the most recent window (whose actuals are known by then)
-are checked per target, horizon and quantile. When coverage misses the level by more than
-``calibration_tolerance``, an additive **conformal shift** is estimated: the ``q``-quantile of
-``actual − forecast``, which would have given exactly the right coverage on that window. The
-shift is then added to the new model's forecasts until the next retrain.
-
-Shifts are per horizon because the error of a 14-day total is much larger than that of a 1-day
-total.
+Before each retrain, recent out-of-sample forecasts with known actuals are checked per target,
+horizon and quantile. If coverage misses by more than the tolerance, the ``q``-quantile of
+``actual − forecast`` is added to the next forecasts.
 """
 
 from __future__ import annotations
@@ -24,16 +18,7 @@ GROUP = ["target", "h"]
 def conformal_shifts(
     calibration: pd.DataFrame, quantiles: list[float], tolerance: float
 ) -> pd.DataFrame:
-    """Coverage and correction per target, horizon and quantile.
-
-    Args:
-        calibration: Out-of-sample rows with ``target``, ``h``, ``actual`` and quantile columns.
-        quantiles: Quantile levels to check.
-        tolerance: Allowed miss in coverage (e.g. 0.02 = 2 points) before a shift is applied.
-
-    Returns:
-        ``target, h, quantile, n, coverage, shift, applied`` (``shift`` is 0 when not applied).
-    """
+    """``target, h, quantile, n, coverage, shift, applied`` (shift 0 when not applied)."""
     rows = []
     for (target, h), group in calibration.groupby(GROUP):
         actual = group["actual"].to_numpy()
@@ -56,7 +41,7 @@ def conformal_shifts(
 
 
 def apply_shifts(predictions: pd.DataFrame, shifts: pd.DataFrame) -> pd.DataFrame:
-    """Add the shifts to the matching ``target``/``h`` rows of ``predictions`` (copy)."""
+    """Add the shifts to the matching ``target``/``h`` rows (returns a copy)."""
     out = predictions.copy()
     if shifts.empty:
         return out
@@ -71,11 +56,7 @@ def apply_shifts(predictions: pd.DataFrame, shifts: pd.DataFrame) -> pd.DataFram
 def coverage_by_segment(
     df: pd.DataFrame, quantiles: list[float], segment_types: list[str]
 ) -> pd.DataFrame:
-    """Coverage of each quantile per target and segment (rows need ``actual``).
-
-    Returns:
-        ``target, segment_type, segment, n`` plus one ``cov_qXX`` column per quantile.
-    """
+    """Coverage of each quantile per target and segment."""
     rows = []
     for segment_type in segment_types:
         if df[segment_type].isna().all():

@@ -1,13 +1,4 @@
-"""Turn NN5 withdrawals into Sri Lankan-looking demand.
-
-Steps (called in this order by :mod:`.build`):
-
-1. :func:`neutralize_uk_holidays` — remove UK holiday effects on the original dates.
-2. :func:`bootstrap_network` — optional: a larger network made of resampled weeks.
-3. :func:`shift_dates` — move the dates to ``start_date`` by whole weeks.
-4. :func:`assign_location_types` / :func:`apply_location_effects` — location level and noise.
-5. :func:`apply_calendar` — Sri Lankan calendar and festival multipliers.
-"""
+"""Turn NN5 withdrawals into Sri Lankan-looking demand, in the numbered steps below."""
 
 from __future__ import annotations
 
@@ -31,17 +22,15 @@ WEEKS_PER_YEAR = 52
 def lognormal_noise(
     rng: np.random.Generator, sigma: float | np.ndarray, size: int | None = None
 ) -> np.ndarray:
-    """Multiplicative noise with mean 1 (``sigma`` may be one value per element)."""
+    """Multiplicative noise with mean 1."""
     return rng.lognormal(-(np.square(sigma)) / 2, sigma, size)
 
 
-# --------------------------------------------------------------------------------------------
-# 1. Remove UK effects
-# --------------------------------------------------------------------------------------------
+# --- 1. Remove UK effects ---
 
 
 def uk_holiday_mask(dates: pd.Series, cfg: ScenarioConfig) -> pd.Series:
-    """True on original NN5 dates affected by UK holidays (see ``uk_neutralize`` in config)."""
+    """True on original NN5 dates affected by UK holidays (``uk_neutralize`` in config)."""
     neutralize = cfg.uk_neutralize
     years = range(dates.dt.year.min() - 1, dates.dt.year.max() + 1)
     affected: set[pd.Timestamp] = set()
@@ -62,9 +51,9 @@ def uk_holiday_mask(dates: pd.Series, cfg: ScenarioConfig) -> pd.Series:
 
 
 def neutralize_uk_holidays(df: pd.DataFrame, cfg: ScenarioConfig) -> pd.DataFrame:
-    """Replace ``withdrawals_lkr`` on UK-holiday dates by the same-weekday median nearby.
+    """Replace UK-holiday values by the nearby same-weekday median; adds ``is_neutralized``.
 
-    Adds ``is_neutralized``. Must run on the original NN5 dates (before :func:`shift_dates`).
+    Must run on the original NN5 dates, before :func:`shift_dates`.
     """
     out = df.sort_values(["machine_id", "date"], ignore_index=True)
     out["is_neutralized"] = uk_holiday_mask(out["date"], cfg)
@@ -79,20 +68,16 @@ def neutralize_uk_holidays(df: pd.DataFrame, cfg: ScenarioConfig) -> pd.DataFram
     return out
 
 
-# --------------------------------------------------------------------------------------------
-# 2. Optional larger network
-# --------------------------------------------------------------------------------------------
+# --- 2. Optional larger network ---
 
 
 def bootstrap_network(
     df: pd.DataFrame, n_machines: int, n_days: int, cfg: ScenarioConfig, rng: np.random.Generator
 ) -> pd.DataFrame:
-    """Build ``n_machines`` series of ``n_days`` days by resampling whole weeks.
+    """``n_machines`` × ``n_days`` series built from whole weeks of random base machines.
 
-    Each new machine copies a random base machine. Target week ``w`` is drawn from the base
-    weeks at the same position in the year (``w mod 52``), so seasonality is kept. Each machine
-    gets its own level factor (lognormal, ``bootstrap.level_sigma``). All other columns
-    (cluster, flags) are copied from the source rows.
+    Weeks are drawn from the same position in the year, so seasonality is kept; each new
+    machine gets its own level factor.
     """
     base = df.sort_values(["machine_id", "date"], ignore_index=True)
     n_base = base["machine_id"].nunique()
@@ -128,17 +113,11 @@ def bootstrap_network(
     return out
 
 
-# --------------------------------------------------------------------------------------------
-# 3. Dates
-# --------------------------------------------------------------------------------------------
+# --- 3. Dates ---
 
 
 def shift_dates(df: pd.DataFrame, start_date: date) -> pd.DataFrame:
-    """Move all dates so the first day becomes ``start_date``; weekdays are kept.
-
-    Raises:
-        ValueError: If the shift is not a whole number of weeks.
-    """
+    """Shift dates so the first day is ``start_date``; raises unless weekdays are kept."""
     shift = pd.Timestamp(start_date) - df["date"].min()
     if shift.days % WEEK:
         raise ValueError(
@@ -148,23 +127,14 @@ def shift_dates(df: pd.DataFrame, start_date: date) -> pd.DataFrame:
     return df.assign(date=df["date"] + shift)
 
 
-# --------------------------------------------------------------------------------------------
-# 4. Location types
-# --------------------------------------------------------------------------------------------
+# --- 4. Location types ---
 
 
 def assign_location_types(
     clusters: pd.DataFrame, cfg: ScenarioConfig, rng: np.random.Generator
 ) -> pd.Series:
-    """Draw a location type for every machine from its cluster label's probabilities.
-
-    Args:
-        clusters: ``machine_id`` and ``cluster_label``, one row per machine.
-
-    Returns:
-        ``location_type`` indexed by ``machine_id`` (machines in sorted order, so the result
-        only depends on the seed).
-    """
+    """Draw each machine's ``location_type`` from its cluster label's probabilities."""
+    # Sorted, so the result depends only on the seed.
     clusters = clusters.sort_values("machine_id")
     types = []
     for label in clusters["cluster_label"]:
@@ -192,18 +162,12 @@ def apply_location_effects(
     return out
 
 
-# --------------------------------------------------------------------------------------------
-# 5. Calendar
-# --------------------------------------------------------------------------------------------
+# --- 5. Calendar ---
 
 
 def calendar_multiplier(calendar: pd.DataFrame, cfg: ScenarioConfig) -> pd.Series:
-    """Demand multiplier per calendar day.
-
-    Poya, salary-week and long-weekend-eve multipliers are multiplied together. Festival
-    windows add one factor: where festivals overlap, the strongest effect wins (the multiplier
-    furthest from 1, so a 0.7 quiet day counts as much as a 1.43 busy day).
-    """
+    """Demand multiplier per day: recurring effects multiply; of overlapping festivals only
+    the strongest (furthest from 1) counts."""
     m = cfg.calendar_multipliers
     result = (
         np.where(calendar["is_poya"], m.poya_day, 1.0)
@@ -223,7 +187,7 @@ def calendar_multiplier(calendar: pd.DataFrame, cfg: ScenarioConfig) -> pd.Serie
 
 
 def apply_calendar(df: pd.DataFrame, calendar: pd.DataFrame, cfg: ScenarioConfig) -> pd.DataFrame:
-    """Join the calendar flags onto ``df`` and multiply ``withdrawals_lkr`` by the day's factor."""
+    """Join the calendar flags and multiply ``withdrawals_lkr`` by each day's factor."""
     cal = calendar.drop(columns="holiday_name").assign(
         multiplier=calendar_multiplier(calendar, cfg)
     )

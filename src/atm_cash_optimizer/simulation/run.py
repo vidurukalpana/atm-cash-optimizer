@@ -1,15 +1,9 @@
-"""Run the policy simulation for one track and write tables, order files and the report.
+"""Simulate all policy settings on a seeded sample of machines and write the results.
 
-Steps: sample ``simulation_machines`` machines (ATMs and CRMs in proportion, seeded); replay the
-backtest test period for every policy setting (fixed schedule, thresholds, optimizer alphas) in
-parallel on ``n_jobs`` cores; write ``sim_daily_<track>``, ``sim_summary_<track>``,
-``orders_<track>`` (+ ``data/orders/orders_<track>.csv``), ``reports/results_<track>.md`` and
-``reports/frontier_<track>.html``.
+Outputs: ``sim_daily_<track>``, ``sim_summary_<track>``, ``orders_<track>`` (+ CSV in
+``data/orders/``), ``reports/results_<track>.md`` and ``reports/frontier_<track>.html``.
 
-Run with::
-
-    python -m atm_cash_optimizer.simulation.run --track lk --timing 10   # time 10 days, no output
-    python -m atm_cash_optimizer.simulation.run --track lk
+Run: ``python -m atm_cash_optimizer.simulation.run --track lk [--machines N] [--timing DAYS]``
 """
 
 from __future__ import annotations
@@ -23,6 +17,7 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 
+from atm_cash_optimizer import setup_logging
 from atm_cash_optimizer.config import load_config
 from atm_cash_optimizer.forecasting.backtest import origin_indices
 from atm_cash_optimizer.io import get_data_dir, get_reports_dir, read_table, write_table
@@ -48,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 def sample_machines(machines: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
-    """Seeded sample of ``n`` machines, keeping the ATM/CRM mix of the track."""
+    """Seeded sample of ``n`` machines, keeping the ATM/CRM mix."""
     rng = np.random.default_rng(seed)
     n = min(n, len(machines))
     parts = []
@@ -59,7 +54,7 @@ def sample_machines(machines: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
 
 
 def load_specs(track: str, n_machines: int, seed: int, test_days: int) -> list[MachineSpec]:
-    """Build one :class:`MachineSpec` per sampled machine (demand, forecasts, calendar)."""
+    """One :class:`MachineSpec` per sampled machine."""
     data = load_planning_data(track)
     daily = read_table(f"{track}_daily").sort_values(["machine_id", "date"])
     dates = pd.DatetimeIndex(sorted(daily["date"].unique()))
@@ -103,7 +98,7 @@ def load_specs(track: str, n_machines: int, seed: int, test_days: int) -> list[M
 
 
 def policies() -> list[Policy]:
-    """Every policy setting of ``backtest.yaml``; optimizer first (the slow ones start early)."""
+    """Every setting in ``backtest.yaml``; optimizer first so the slow tasks start early."""
     cfg = load_config("backtest")
     return [
         *[OptimizerPolicy(a) for a in cfg.sweeps.alpha],
@@ -122,7 +117,7 @@ def _truncate(spec: MachineSpec, days: int) -> MachineSpec:
 
 
 def orders_frame(orders: list[tuple[str, float, Order]], last_date: pd.Timestamp) -> pd.DataFrame:
-    """One row per executed order (orders dated after the last simulated day are dropped)."""
+    """One row per order executed within the simulated days."""
     rows = [
         {
             "policy": policy,
@@ -142,7 +137,7 @@ def orders_frame(orders: list[tuple[str, float, Order]], last_date: pd.Timestamp
 
 
 def run(track: str, n_machines: int | None = None, timing: int | None = None) -> None:
-    """Simulate every policy setting on ``track`` (``timing``: only N days of the optimizer)."""
+    """Simulate ``track``; ``timing = N`` times N optimizer days and writes nothing."""
     backtest = load_config("backtest")
     model = load_config("model")
     costs = load_config("costs")
@@ -229,15 +224,12 @@ def run(track: str, n_machines: int | None = None, timing: int | None = None) ->
 
 
 def main() -> None:
-    """Command-line entry point."""
     parser = argparse.ArgumentParser(description="Simulate the replenishment policies.")
     parser.add_argument("--track", choices=["nn5", "lk"], required=True)
     parser.add_argument("--machines", type=int, help="number of machines (default: config)")
     parser.add_argument("--timing", type=int, metavar="DAYS", help="time N days, write nothing")
     args = parser.parse_args()
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging()
     run(args.track, args.machines, args.timing)
 
 

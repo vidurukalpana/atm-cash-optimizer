@@ -1,16 +1,8 @@
-"""Build the Sri Lankan calendar (``lk_calendar``) for the simulated date range.
+"""Sri Lankan calendar (``lk_calendar``): holidays, Poya, salary week, long weekends, festivals.
 
-Holidays come from ``holidays.country_holidays("LK")``. For years the library does not cover
-(no Poya days), ``configs/lk_holidays.csv`` (columns ``date``, ``name``) is used instead.
-
-Columns:
-
-- ``date``, ``holiday_name`` (``"; "``-joined, empty if none)
-- ``is_public_holiday``, ``is_poya``, ``is_no_service_day``
-- ``is_salary_week``, ``is_long_weekend_eve``
-- ``<event>_day`` for every festival in ``scenario.yaml → events``: days relative to the
-  festival's anchor holiday (e.g. ``-2`` = two days before Avurudu), only inside its windows
-- ``is_avurudu_window``, ``is_christmas_window`` (from the event columns, data contract)
+Holidays come from the ``holidays`` library; years it lacks need ``configs/lk_holidays.csv``.
+``<event>_day`` columns hold the day relative to a festival's holiday (e.g. -2 = two days
+before Avurudu), only inside that festival's windows.
 """
 
 from __future__ import annotations
@@ -33,16 +25,12 @@ POYA_SUFFIX = "Full Moon Poya Day"
 
 
 def is_poya_name(name: str) -> bool:
-    """True for a Full Moon Poya Day (not for the extra "Day Following ..." holidays)."""
+    """True for a Full Moon Poya Day (not the extra "Day Following ..." holiday)."""
     return name.endswith(POYA_SUFFIX) and not name.startswith("Day Following")
 
 
 def lk_holidays(years: range, fallback_csv: Path | None = None) -> dict[date, list[str]]:
-    """Sri Lankan holiday names per date for ``years``.
-
-    Raises:
-        ValueError: If a year has no Poya days in the library and no fallback CSV covers it.
-    """
+    """Holiday names per date; raises if a year is missing from both library and CSV."""
     result: dict[date, list[str]] = defaultdict(list)
     missing: list[int] = []
     for year in years:
@@ -68,7 +56,7 @@ def lk_holidays(years: range, fallback_csv: Path | None = None) -> dict[date, li
 
 
 def _long_weekend_eve(non_working: pd.Series, min_days: int) -> pd.Series:
-    # Length of the run of non-working days starting on each date (0 on working days).
+    # Length of the run of non-working days starting on each date.
     run = non_working.astype(int)
     for i in range(len(run) - 2, -1, -1):
         if run.iat[i]:
@@ -80,8 +68,8 @@ def _long_weekend_eve(non_working: pd.Series, min_days: int) -> pd.Series:
 def build_lk_calendar(
     start: date, end: date, cfg: ScenarioConfig, fallback_csv: Path | None = None
 ) -> pd.DataFrame:
-    """One row per day from ``start`` to ``end`` (inclusive) with Sri Lankan calendar flags."""
-    # Look a little past the end so long weekends at the edge are detected.
+    """One row per day from ``start`` to ``end`` (inclusive)."""
+    # Look past the end so a long weekend right after it is still detected.
     padded_end = end + timedelta(days=cfg.long_weekend_min_days)
     names = lk_holidays(range(start.year, padded_end.year + 1), fallback_csv)
     dates = pd.date_range(start, padded_end, freq="D", unit="ns")

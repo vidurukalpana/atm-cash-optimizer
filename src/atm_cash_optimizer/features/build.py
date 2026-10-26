@@ -1,25 +1,14 @@
-"""Origin–horizon training rows for the forecasting models (PySpark).
+"""Training rows for the forecasting models, built with PySpark.
 
-For every machine, target series, origin date ``o`` and horizon ``h = 1..horizon_max`` there is
-one row with:
+One row per machine, target, origin day ``o`` and horizon ``h``:
 
-- **origin features** — only data with ``date <= o`` (no future leakage):
-  ``y_lag_<k>`` = demand ``k`` days before ``o+1`` (``y_lag_1`` = demand on ``o``),
-  ``y_roll_mean_<n>`` / ``y_roll_std_<n>`` over the last ``n`` days,
-  ``y_wd_mean_<d>`` = mean demand on weekday ``d`` (0 = Monday) over the last
-  ``weekday_mean_weeks`` weeks, ``origin_weekday``, ``origin_month``;
-- **window features** over ``o+1 .. o+h`` — calendar facts known in advance:
-  ``n_weekend_days``, ``expected_by_weekday`` and the calendar counts (``n_poya``,
-  ``n_avurudu_days``, ...; all 0 for ``nn5``);
-- **machine features** — ``cluster_id``, ``location_type``, ``machine_type``;
-- **label** ``y_cum`` = total demand over ``o+1 .. o+h`` (null when ``o+h`` is past the data).
+- origin features use only data up to ``o`` (lags, rolling stats, weekday means);
+- window features count calendar facts in ``o+1 .. o+h`` (known in advance; 0 for ``nn5``);
+- label ``y_cum`` = total demand over ``o+1 .. o+h`` (null past the end of the data).
 
-Targets: ``withdrawals`` (all machines) and ``net`` = withdrawals − deposits (CRMs, ``lk``).
+Targets: ``withdrawals`` (all machines) and ``net`` = withdrawals − deposits (lk CRMs).
 
-Run with::
-
-    python -m atm_cash_optimizer.features.build            # both tracks
-    python -m atm_cash_optimizer.features.build --track lk
+Run: ``python -m atm_cash_optimizer.features.build [--track nn5|lk]``
 """
 
 from __future__ import annotations
@@ -33,6 +22,7 @@ import pandas as pd
 from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
+from atm_cash_optimizer import setup_logging
 from atm_cash_optimizer.config import ModelConfig, ScenarioConfig, load_config
 from atm_cash_optimizer.features.spark_session import get_spark
 from atm_cash_optimizer.io import get_data_dir, register_parquet_view, table_path
@@ -45,7 +35,7 @@ KEYS = ["machine_id", "target"]
 WEEKDAYS = range(7)  # 0 = Monday … 6 = Sunday
 WEEKEND = (5, 6)
 
-# lk_calendar flag → window-count feature (from the plan)
+# lk_calendar flag → window-count feature
 CALENDAR_COUNTS = {
     "is_public_holiday": "n_public_holidays",
     "is_poya": "n_poya",
@@ -55,13 +45,11 @@ CALENDAR_COUNTS = {
 }
 
 
-# --------------------------------------------------------------------------------------------
-# Inputs
-# --------------------------------------------------------------------------------------------
+# --- Inputs ---
 
 
 def load_daily(spark: SparkSession, track: str) -> DataFrame:
-    """Long table ``machine_id, date, target, y, cluster_id, location_type, machine_type``."""
+    """``machine_id, date, target, y`` plus static machine columns."""
     if track == "nn5":
         clusters = spark.read.parquet(str(table_path("machine_clusters")))
         return (
@@ -100,11 +88,9 @@ def load_daily(spark: SparkSession, track: str) -> DataFrame:
 def calendar_indicators(
     track: str, start: pd.Timestamp, end: pd.Timestamp, scenario: ScenarioConfig
 ) -> pd.DataFrame:
-    """Daily 0/1 indicators, one column per window-count feature, from ``start`` to ``end``.
+    """Daily 0/1 indicators, one column per window-count feature (all 0 for ``nn5``).
 
-    ``lk``: from the Sri Lankan calendar, plus ``n_<event>_days`` for every festival in
-    ``scenario.yaml`` and ``n_<event>_after_days`` for festivals with windows after the
-    holiday (e.g. the quiet days after Avurudu). ``nn5``: the same columns, all 0.
+    ``n_<event>_after_days`` separates days after a festival (e.g. quiet days after Avurudu).
     """
     dates = pd.date_range(start, end, freq="D")
     after_events = [e for e, cfg in scenario.events.items() if any(w.end > 0 for w in cfg.windows)]
@@ -127,13 +113,11 @@ def calendar_indicators(
     return out[["date", *columns]]
 
 
-# --------------------------------------------------------------------------------------------
-# Features
-# --------------------------------------------------------------------------------------------
+# --- Features ---
 
 
 def _weekday(date_col: Column) -> Column:
-    # Spark's dayofweek is 1 = Sunday … 7 = Saturday; convert to 0 = Monday … 6 = Sunday.
+    # Spark: 1 = Sunday … 7 = Saturday; we use 0 = Monday … 6 = Sunday.
     return ((F.dayofweek(date_col) + 5) % 7).cast("int")
 
 
@@ -145,20 +129,12 @@ def _weekday_count(origin_weekday: Column, h: Column, weekday: int) -> Column:
 
 
 def history_days(model: ModelConfig) -> int:
-    """Days of history an origin needs before all its features are defined."""
+    """Days of history needed before every feature of an origin is defined."""
     return max(max(model.lags), max(model.rolling_windows), 7 * model.weekday_mean_weeks)
 
 
 def build_features(daily: DataFrame, calendar: DataFrame, model: ModelConfig) -> DataFrame:
-    """Build origin–horizon rows (see the module docstring).
-
-    Args:
-        daily: ``machine_id, date, target, y`` plus static machine columns; one row per
-            machine, target and day, with no gaps.
-        calendar: ``date`` plus 0/1 indicator columns named after their window feature;
-            must cover every ``o+h``.
-        model: Lags, rolling windows, weekday-mean weeks and horizon.
-    """
+    """Origin–horizon rows; ``daily`` has no gaps and ``calendar`` covers every ``o+h``."""
     static = [c for c in daily.columns if c not in (*KEYS, "date", "y")]
     by_date = Window.partitionBy(*KEYS).orderBy("date")
 
@@ -207,13 +183,13 @@ def build_features(daily: DataFrame, calendar: DataFrame, model: ModelConfig) ->
         "target_date", F.date_add("origin_date", F.col("h"))
     )
 
-    # Label: cumulative-sum difference, via a self-join on date = o + h.
+    # Label = cumulative sum at o + h minus at o (self-join on the date).
     future = base.select(*KEYS, F.col("date").alias("target_date"), F.col("cs").alias("cs_end"))
     rows = rows.join(future, [*KEYS, "target_date"], "left").withColumn(
         "y_cum", F.col("cs_end") - F.col("cs")
     )
 
-    # Window counts: cumulative sums of the calendar indicators, read at o + h and at o.
+    # Window counts the same way, from cumulative sums of the calendar indicators.
     indicators = [c for c in calendar.columns if c != "date"]
     cum = calendar.select(
         "date",
@@ -253,13 +229,11 @@ def build_features(daily: DataFrame, calendar: DataFrame, model: ModelConfig) ->
     )
 
 
-# --------------------------------------------------------------------------------------------
-# Pipeline
-# --------------------------------------------------------------------------------------------
+# --- Pipeline ---
 
 
 def run(tracks: tuple[str, ...] = TRACKS, spark: SparkSession | None = None) -> None:
-    """Build and write ``features_<track>`` for each track (Parquet partitioned by target)."""
+    """Write ``features_<track>`` (Parquet partitioned by target) and its DuckDB view."""
     spark = spark or get_spark()
     model = load_config("model")
     scenario = load_config("scenario")
@@ -288,13 +262,10 @@ def run(tracks: tuple[str, ...] = TRACKS, spark: SparkSession | None = None) -> 
 
 
 def main() -> None:
-    """Command-line entry point."""
     parser = argparse.ArgumentParser(description="Build origin–horizon feature tables.")
     parser.add_argument("--track", choices=[*TRACKS, "all"], default="all")
     args = parser.parse_args()
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging()
     run(TRACKS if args.track == "all" else (args.track,))
 
 

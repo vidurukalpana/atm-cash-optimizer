@@ -1,15 +1,6 @@
-"""Choose which machines are Cash Recycler Machines (CRMs) and simulate their deposits.
+"""Pick the CRMs and simulate their deposits (ATMs get 0).
 
-For each CRM, ``deposits_lkr`` on a day is::
-
-    ratio × machine's mean withdrawals × weekday factor × holiday factor × noise
-
-- ``ratio`` is drawn once per CRM from ``crm_deposits.ratio_range``;
-- the weekday factor comes from ``crm_deposits.weekday_profile`` (rescaled to mean 1);
-- the holiday factor is ``crm_deposits.holiday_multiplier`` on public holidays, else 1;
-- noise is lognormal with mean 1.
-
-ATMs get ``deposits_lkr = 0``.
+Daily deposits = ratio (per CRM) × mean withdrawals × weekday factor × holiday factor × noise.
 """
 
 from __future__ import annotations
@@ -24,7 +15,7 @@ from atm_cash_optimizer.scenario.transform import lognormal_noise
 def choose_machine_types(
     machine_ids: list[str], crm_fraction: float, rng: np.random.Generator
 ) -> pd.Series:
-    """``machine_type`` (``"ATM"`` or ``"CRM"``) per machine; ``round(fraction × n)`` CRMs."""
+    """``"ATM"`` or ``"CRM"`` per machine; ``round(fraction × n)`` are CRMs."""
     ids = sorted(machine_ids)
     n_crm = round(crm_fraction * len(ids))
     crms = set(rng.choice(ids, size=n_crm, replace=False)) if n_crm else set()
@@ -32,12 +23,8 @@ def choose_machine_types(
 
 
 def simulate_deposits(df: pd.DataFrame, cfg: ScenarioConfig, rng: np.random.Generator) -> pd.Series:
-    """Daily ``deposits_lkr`` aligned with ``df``.
-
-    Args:
-        df: Rows sorted by ``machine_id``, ``date`` with ``machine_type``,
-            ``withdrawals_lkr`` and ``is_public_holiday``.
-    """
+    """Daily ``deposits_lkr`` aligned with ``df`` (needs ``machine_type``, ``withdrawals_lkr``,
+    ``is_public_holiday``)."""
     deposits_cfg = cfg.crm_deposits
     profile = np.array(deposits_cfg.weekday_profile)
     profile = profile / profile.mean()

@@ -1,4 +1,4 @@
-"""What the simulation knows about one machine: fixed facts, daily cash and pending orders."""
+"""One machine in the simulation: fixed facts, daily cash and pending orders."""
 
 from __future__ import annotations
 
@@ -9,17 +9,12 @@ import pandas as pd
 
 from atm_cash_optimizer.optimization.types import ForecastWindow
 
-CRM_TARGET_FRACTION = 0.5
-"""CRMs are refilled or emptied to half the vault (room for both withdrawals and deposits)."""
+CRM_TARGET_FRACTION = 0.5  # CRMs are refilled/emptied to half: room for both directions
 
 
 @dataclass(frozen=True)
 class MachineSpec:
-    """Everything fixed about one machine during a simulation run.
-
-    ``withdrawals`` holds the real daily demand per denomination (``"total"`` for CRMs and nn5);
-    ``dates[0]`` is the origin before the first simulated day.
-    """
+    """Fixed facts about one machine; ``dates[0]`` is the origin before the first simulated day."""
 
     machine_id: str
     machine_type: str
@@ -37,12 +32,12 @@ class MachineSpec:
         return self.machine_type == "CRM"
 
     def initial_cash(self, fill_fraction: float) -> dict[str, float]:
-        """ATMs start at ``fill_fraction`` of capacity; CRMs at half the vault."""
+        """ATMs start at ``fill_fraction`` of capacity, CRMs half full."""
         fraction = CRM_TARGET_FRACTION if self.is_crm else fill_fraction
         return {d: fraction * c for d, c in self.capacity.items()}
 
     def history(self, day: pd.Timestamp) -> pd.DataFrame:
-        """Real demand up to and including ``day`` — the only demand a policy may see."""
+        """Real demand up to and including ``day`` (all a policy may see)."""
         keep = self.dates <= day
         return pd.DataFrame(
             {
@@ -55,7 +50,7 @@ class MachineSpec:
 
 @dataclass(frozen=True)
 class Order:
-    """A visit ordered by a policy (or the emergency rule)."""
+    """A visit ordered by a policy or by the emergency rule."""
 
     machine_id: str
     created: pd.Timestamp
@@ -74,7 +69,7 @@ class Order:
 
 @dataclass
 class MachineState:
-    """Cash per denomination at the end of the current day, and orders not yet executed."""
+    """Cash per denomination at the end of the day, and orders not yet executed."""
 
     cash: dict[str, float]
     pending: list[Order] = field(default_factory=list)
@@ -84,5 +79,5 @@ class MachineState:
         return sum(self.cash.values())
 
     def has_order_by(self, last_date: pd.Timestamp) -> bool:
-        """True if a visit is already ordered for a date up to ``last_date``."""
+        """True if a visit is already ordered for ``last_date`` or earlier."""
         return any(o.visit_date <= last_date for o in self.pending)

@@ -1,12 +1,7 @@
-"""Typed, validated access to the YAML files in ``configs/``.
+"""Validated settings from ``configs/*.yaml``: ``load_config(name)`` returns a frozen model.
 
-Every tunable value of the project lives in ``configs/*.yaml`` and is read through
-:func:`load_config`, which returns an immutable pydantic model. Invalid values (negative fees,
-rates outside [0, 1], unsorted quantiles, unknown keys, ...) raise
-:class:`pydantic.ValidationError` when the file is loaded.
-
-The config directory defaults to ``<repo>/configs`` and can be overridden with the
-``ATM_CONFIG_DIR`` environment variable or the ``config_dir`` argument.
+Invalid values (negative fees, unsorted quantiles, unknown keys, ...) fail when the file is
+loaded. The config directory can be moved with the ``ATM_CONFIG_DIR`` environment variable.
 """
 
 from __future__ import annotations
@@ -38,14 +33,12 @@ CONFIG_DIR_ENV = "ATM_CONFIG_DIR"
 DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
 
 UnitInterval = Annotated[float, Field(ge=0, le=1)]
-"""A value in [0, 1], e.g. an interest rate or a fraction of capacity."""
-
 OpenUnitInterval = Annotated[float, Field(gt=0, lt=1)]
-"""A value in (0, 1), e.g. a quantile level."""
+NonNegativeFloat = Annotated[float, Field(ge=0)]
 
 
 class _Config(BaseModel):
-    """Base for all config models: immutable, and unknown keys are rejected (catches typos)."""
+    """Frozen; unknown keys are rejected so typos in YAML fail loudly."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -56,13 +49,11 @@ def _check_sorted_unique(values: list, field_name: str) -> list:
     return values
 
 
-# --------------------------------------------------------------------------------------------
-# costs.yaml
-# --------------------------------------------------------------------------------------------
+# --- costs.yaml ---
 
 
 class CostsConfig(_Config):
-    """Prices used by the optimizer objective and the backtest ``total_cost``."""
+    """Prices used by the optimizer and in ``total_cost``."""
 
     currency: str = Field(min_length=1)
     visit_fee: PositiveFloat
@@ -71,13 +62,11 @@ class CostsConfig(_Config):
     stockout_penalty_per_day: PositiveFloat
 
 
-# --------------------------------------------------------------------------------------------
-# machines.yaml
-# --------------------------------------------------------------------------------------------
+# --- machines.yaml ---
 
 
 class TrackConfig(_Config):
-    """Denominations used by one track (``nn5`` or ``lk``)."""
+    """Denominations of one track (``nn5`` or ``lk``)."""
 
     denominations: list[str] = Field(min_length=1)
 
@@ -106,13 +95,13 @@ class AtmConfig(_Config):
 
 
 class CrmConfig(_Config):
-    """Cash Recycler Machine vault capacity (CRMs are planned on total cash)."""
+    """CRMs are planned on total cash, so only the vault size matters."""
 
     vault_capacity_lkr: PositiveFloat
 
 
 class MachinesConfig(_Config):
-    """Machine capacities, denominations per track and planning constants."""
+    """Capacities, denominations per track and planning constants."""
 
     nn5_unit_lkr: PositiveFloat
     tracks: dict[str, TrackConfig] = Field(min_length=1)
@@ -120,7 +109,6 @@ class MachinesConfig(_Config):
     crm: CrmConfig
     bundle_notes: PositiveInt
     order_lead_days: NonNegativeInt
-    planning_horizon_days: PositiveInt
     initial_fill_fraction: UnitInterval
 
     @model_validator(mode="after")
@@ -134,9 +122,7 @@ class MachinesConfig(_Config):
         return self
 
 
-# --------------------------------------------------------------------------------------------
-# model.yaml
-# --------------------------------------------------------------------------------------------
+# --- model.yaml ---
 
 
 class LightGBMParams(_Config):
@@ -151,7 +137,7 @@ class LightGBMParams(_Config):
 
 
 class ModelConfig(_Config):
-    """Forecasting settings: quantile levels, features and retraining schedule."""
+    """Forecasting: quantiles, features, retraining and compute limits."""
 
     quantiles: list[OpenUnitInterval] = Field(min_length=1)
     horizon_max: PositiveInt
@@ -159,7 +145,6 @@ class ModelConfig(_Config):
     rolling_windows: list[PositiveInt] = Field(min_length=1)
     weekday_mean_weeks: PositiveInt
     retrain_every_days: PositiveInt
-    min_train_days: PositiveInt
     lightgbm: LightGBMParams
     n_jobs: PositiveInt
     ets_train_days: PositiveInt
@@ -173,7 +158,7 @@ class ModelConfig(_Config):
     @classmethod
     def _quantiles_valid(cls, v: list[float]) -> list[float]:
         _check_sorted_unique(v, "quantiles")
-        # q50 is required: the optimizer uses the median for the idle-cash cost.
+        # The optimizer needs the median for the idle-cash cost.
         if 0.5 not in v:
             raise ValueError("quantiles must include 0.5 (the median)")
         return v
@@ -192,33 +177,23 @@ class ModelConfig(_Config):
         return v
 
 
-# --------------------------------------------------------------------------------------------
-# backtest.yaml
-# --------------------------------------------------------------------------------------------
+# --- backtest.yaml ---
 
 
 class SweepsConfig(_Config):
-    """Parameter values tried for each policy in the backtest sweep."""
+    """Policy settings tried in the simulation."""
 
     threshold: list[OpenUnitInterval] = Field(min_length=1)
-    buffer: list[Annotated[float, Field(ge=0)]] = Field(min_length=1)
     alpha: list[OpenUnitInterval] = Field(min_length=1)
 
-    @field_validator("threshold", "buffer", "alpha")
+    @field_validator("threshold", "alpha")
     @classmethod
     def _sorted(cls, v: list[float], info: ValidationInfo) -> list[float]:
         return _check_sorted_unique(v, info.field_name)
 
 
-class SensitivityConfig(_Config):
-    """Multipliers used to re-cost backtest results."""
-
-    idle_cash_annual_rate_multipliers: list[PositiveFloat] = Field(min_length=1)
-    visit_fee_multipliers: list[PositiveFloat] = Field(min_length=1)
-
-
 class BacktestConfig(_Config):
-    """Day-by-day replay settings."""
+    """Test period, simulation sample and policy settings."""
 
     test_days: PositiveInt
     warmup_days: NonNegativeInt
@@ -226,7 +201,6 @@ class BacktestConfig(_Config):
     simulation_machines: PositiveInt
     sweeps: SweepsConfig
     fixed_schedule_weekday: Annotated[int, Field(ge=0, le=6)]
-    sensitivity: SensitivityConfig
     seed: NonNegativeInt
 
     @field_validator("report_horizons")
@@ -241,11 +215,8 @@ class BacktestConfig(_Config):
         return self
 
 
-# --------------------------------------------------------------------------------------------
-# scenario.yaml
-# --------------------------------------------------------------------------------------------
+# --- scenario.yaml ---
 
-NonNegativeFloat = Annotated[float, Field(ge=0)]
 _MONTH_DAY = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")
 
 
@@ -255,7 +226,7 @@ def _check_sums_to_one(shares: dict[str, float], what: str) -> None:
 
 
 class LocationModifier(_Config):
-    """How a location type changes demand: level, extra noise and optional peak months."""
+    """Demand level, extra noise and optional peak months of a location type."""
 
     level: PositiveFloat
     noise_sigma: NonNegativeFloat
@@ -264,7 +235,7 @@ class LocationModifier(_Config):
 
 
 class CalendarMultipliers(_Config):
-    """Demand multipliers for recurring calendar effects."""
+    """Multipliers for recurring calendar effects."""
 
     salary_week: PositiveFloat
     long_weekend_eve: PositiveFloat
@@ -272,7 +243,7 @@ class CalendarMultipliers(_Config):
 
 
 class EventWindow(_Config):
-    """Days ``[from, to]`` relative to a festival's anchor holiday, with a demand multiplier."""
+    """Days ``[from, to]`` around a festival's holiday, with a demand multiplier."""
 
     start: int = Field(alias="from")
     end: int = Field(alias="to")
@@ -286,14 +257,14 @@ class EventWindow(_Config):
 
 
 class EventConfig(_Config):
-    """A festival season anchored on a Sri Lankan holiday name."""
+    """A festival season, anchored on a holiday name from the ``holidays`` library."""
 
     anchor: str = Field(min_length=1)
     windows: list[EventWindow] = Field(min_length=1)
 
 
 class CrmDepositsConfig(_Config):
-    """How simulated CRM deposits are generated."""
+    """How simulated CRM deposits are drawn."""
 
     ratio_range: tuple[PositiveFloat, PositiveFloat]
     weekday_profile: list[PositiveFloat] = Field(min_length=7, max_length=7)
@@ -309,14 +280,14 @@ class CrmDepositsConfig(_Config):
 
 
 class NoServiceConfig(_Config):
-    """Day types on which no cash-in-transit visit is possible."""
+    """Days on which cash-in-transit vans do not run."""
 
     poya: bool
     public_holidays: bool
 
 
 class UkNeutralizeConfig(_Config):
-    """Which original NN5 dates are replaced to remove UK holiday effects."""
+    """Original NN5 dates replaced to remove UK holiday effects."""
 
     days_around_holiday: NonNegativeInt
     extra_windows: list[tuple[str, str]]
@@ -333,13 +304,13 @@ class UkNeutralizeConfig(_Config):
 
 
 class BootstrapConfig(_Config):
-    """Settings for the optional larger network (``--n-machines`` / ``--years``)."""
+    """Larger bootstrapped network (``--n-machines`` / ``--years``)."""
 
     level_sigma: NonNegativeFloat
 
 
 class ScenarioConfig(_Config):
-    """Simulated Sri Lankan network (``lk`` track) built on top of NN5."""
+    """Simulated Sri Lankan network (``lk`` track) built from NN5."""
 
     start_date: date
     seed: NonNegativeInt
@@ -372,9 +343,7 @@ class ScenarioConfig(_Config):
         return self
 
 
-# --------------------------------------------------------------------------------------------
-# Loading
-# --------------------------------------------------------------------------------------------
+# --- Loading ---
 
 ConfigName = Literal["costs", "machines", "model", "backtest", "scenario"]
 
@@ -388,7 +357,7 @@ CONFIG_MODELS: dict[str, type[_Config]] = {
 
 
 def get_config_dir(config_dir: str | Path | None = None) -> Path:
-    """Return the config directory: argument, else ``$ATM_CONFIG_DIR``, else ``<repo>/configs``."""
+    """Argument, else ``$ATM_CONFIG_DIR``, else ``<repo>/configs``."""
     if config_dir is not None:
         return Path(config_dir)
     env_dir = os.environ.get(CONFIG_DIR_ENV)
@@ -414,20 +383,7 @@ def load_config(
 
 
 def load_config(name: ConfigName, config_dir: str | Path | None = None) -> _Config:
-    """Load and validate ``configs/<name>.yaml``.
-
-    Args:
-        name: One of ``"costs"``, ``"machines"``, ``"model"``, ``"backtest"``, ``"scenario"``.
-        config_dir: Directory holding the YAML files (see :func:`get_config_dir`).
-
-    Returns:
-        An immutable pydantic model for that file.
-
-    Raises:
-        ValueError: If ``name`` is not a known config.
-        FileNotFoundError: If the YAML file does not exist.
-        pydantic.ValidationError: If a value is missing, has the wrong type or breaks a rule.
-    """
+    """Load and validate ``configs/<name>.yaml`` (raises ``ValidationError`` on bad values)."""
     if name not in CONFIG_MODELS:
         raise ValueError(f"unknown config {name!r}; expected one of {sorted(CONFIG_MODELS)}")
 

@@ -1,4 +1,4 @@
-"""Policy metrics exactly as defined in ``docs/metrics.md`` (after the warmup days)."""
+"""Policy metrics exactly as defined in ``docs/metrics.md``."""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ DAYS_PER_YEAR = 365
 
 
 def after_warmup(daily: pd.DataFrame, warmup_days: int) -> pd.DataFrame:
-    """Drop the first ``warmup_days`` simulated days (same dates for every machine)."""
+    """Drop the first ``warmup_days`` simulated days."""
     first_kept = daily["date"].min() + pd.Timedelta(days=warmup_days)
     return daily[daily["date"] >= first_kept]
 
 
 def summarize(daily: pd.DataFrame, costs: CostsConfig, warmup_days: int) -> pd.DataFrame:
-    """One row per ``(policy, param, machine_id)`` with every metric of ``docs/metrics.md``."""
+    """One row per ``(policy, param, machine_id)``."""
     df = after_warmup(daily, warmup_days)
     out = df.groupby(GROUP).agg(
         days=("date", "size"),
@@ -43,7 +43,7 @@ def summarize(daily: pd.DataFrame, costs: CostsConfig, warmup_days: int) -> pd.D
 
 
 def network_totals(summary: pd.DataFrame) -> pd.DataFrame:
-    """Network view per ``(policy, param)``: sums over machines, rates over all machine-days."""
+    """Per ``(policy, param)``: sums over machines, rates over all machine-days."""
     sums = [
         "visits",
         "emergency_visits",

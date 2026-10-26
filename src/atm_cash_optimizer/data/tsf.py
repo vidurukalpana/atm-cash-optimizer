@@ -1,16 +1,6 @@
-"""Parse ``.tsf`` files (Monash forecasting archive format) into a long DataFrame.
+"""Parse ``.tsf`` files (Monash forecasting archive) into a long DataFrame.
 
-File layout::
-
-    # comment lines
-    @attribute series_name string
-    @attribute start_timestamp date
-    @frequency daily
-    @data
-    T1:1996-03-18 00-00-00:13.4,14.7,?,...
-
-Each data line holds the attribute values followed by the comma-separated observations, all
-separated by ``:``. ``?`` marks a missing value.
+Data lines look like ``T1:1996-03-18 00-00-00:13.4,14.7,?,...``; ``?`` is a missing value.
 """
 
 from __future__ import annotations
@@ -32,18 +22,8 @@ def _parse_values(text: str) -> np.ndarray:
 
 
 def read_tsf(path: str | Path) -> pd.DataFrame:
-    """Read a daily ``.tsf`` file.
-
-    Args:
-        path: Path to the ``.tsf`` file.
-
-    Returns:
-        Long DataFrame with columns ``machine_id`` (``NN5_001``, ``NN5_002``, ... in file order),
-        ``date`` (datetime64) and ``withdrawals_raw`` (float, NaN where the file has ``?``).
-
-    Raises:
-        ValueError: If the file is not daily, lacks the expected attributes, or a line is malformed.
-    """
+    """Read a daily ``.tsf`` file into ``machine_id`` (``NN5_001``…), ``date`` and
+    ``withdrawals_raw`` (NaN where the file has ``?``)."""
     attributes: list[str] = []
     frequency: str | None = None
     frames: list[pd.DataFrame] = []
